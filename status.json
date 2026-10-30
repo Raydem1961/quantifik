@@ -1,0 +1,18 @@
+{
+ "referencia": "2026-09",
+ "composicoes": 10599,
+ "insumos_com_preco": 4516,
+ "precos_derivados": 195,
+ "encargos_percent": {
+  "sd": {
+   "horista": 117.73,
+   "mensalista": 72.85
+  },
+  "cd": {
+   "horista": 101.7,
+   "mensalista": 60.13
+  }
+ },
+ "composicoes_com_custo_oficial": 8443,
+ "atualizado_em": "2026-10-30T23:07:57+00:00"
+}

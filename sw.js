@@ -1,5 +1,5 @@
 /* QUANTIFIK v1.1: funciona offline depois da primeira abertura */
-const CACHE = "quantifik-v1.1";
+const CACHE = "quantifik-2026-09";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./xlsx.full.min.js", "./jszip.min.js",
   "./icon-192.png", "./icon-512.png", "./maskable-512.png", "./apple-touch-icon.png", "./favicon-48.png"];
 self.addEventListener("install", e => {
