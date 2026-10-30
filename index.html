@@ -190,7 +190,7 @@ a.btn.pri,label.btn.pri{color:var(--accent-ink)}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 
 /* campos */
-input[type=text],input[type=search],input[type=number],select,textarea{width:100%;font:400 14px "Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;color:var(--ink);background:var(--field);
+input[type=text],input[type=search],input[type=number],input[type=date],select,textarea{width:100%;font:400 14px "Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;color:var(--ink);background:var(--field);
   border:1px solid var(--line);border-bottom-color:var(--stroke-b);border-radius:4px;padding:8px 10px;min-height:38px}
 input:focus,select:focus,textarea:focus{outline:none;border-bottom-color:var(--accent);box-shadow:inset 0 -1px 0 var(--accent)}
 input::placeholder,textarea::placeholder{color:var(--muted);opacity:.8}
@@ -1134,10 +1134,16 @@ let cot = (function(){ const d = lsGet(COT_KEY); return d && Array.isArray(d.lis
 function cotSave(){ lsSet(COT_KEY, cot); }
 function cotId(){ return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function cotAtual(){ return cot.list.find(c => c.id === cot.atual) || null; }
+function cotHoje(){ const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function cotDate(c){ const d = new Date((c.data || cotHoje()) + "T12:00:00"); return isNaN(d) ? new Date() : d; }
+function cotNum(c){
+  if (!c.num){ cot.seq = (cot.seq || 0) + 1; c.num = String(cot.seq).padStart(3, "0") + "/" + cotDate(c).getFullYear(); cotSave(); }
+  return c.num;
+}
 function cotNome(c, i){ return c.cliente || c.obra || ("Cotação " + (i + 1)); }
 function cotNova(base){
-  const c = Object.assign({ id:cotId(), cliente:"", obra:"", resp:"", validade:30, bdi:settings.bdi || 0, obs:"", det:true, criado:Date.now(), itens:[] }, base || {});
-  cot.list.push(c); cot.atual = c.id; cotSave(); return c;
+  const c = Object.assign({ id:cotId(), cliente:"", obra:"", resp:"", data:cotHoje(), validade:30, bdi:settings.bdi || 0, obs:"", det:true, criado:Date.now(), itens:[] }, base || {});
+  cot.list.push(c); cot.atual = c.id; cotNum(c); cotSave(); return c;
 }
 function cotMed(c){
   const key = unitKey(c.unidade), expected = DIMS_EXPECTED[key], n = num($("dN").value) || 1, parts = [];
@@ -1174,11 +1180,20 @@ async function cotBases(c){
   const bs = Array.from(new Set(c.itens.map(i => i.base)));
   for (const b of bs) if (!state.data[b]) await loadBase(b);
 }
+function r2(n){ return Math.round(n * 100) / 100; }
+/* preços de venda com BDI embutido; cada linha é arredondada para que as somas do PDF fechem ao centavo */
 function cotCalc(c){
   const f = 1 + (c.bdi || 0) / 100;
-  const res = c.itens.map(it => { const r = cotItem(it); r.venda = r.grand * f; return r; });
+  const cat = { mo:0, mat:0, eqp:0, srv:0, aux:0 };
+  const res = c.itens.map(it => {
+    const r = cotItem(it);
+    r.cv = { mo:0, mat:0, eqp:0, srv:0, aux:0 }; r.venda = 0;
+    r.rows.forEach(x => { x.pv = r2(x.p * f); x.cv = r2(x.cost * f); r.cv[x.t] = r2((r.cv[x.t] || 0) + x.cv); r.venda = r2(r.venda + x.cv); });
+    Object.keys(cat).forEach(t => { cat[t] = r2(cat[t] + (r.cv[t] || 0)); });
+    return r;
+  });
   const custo = res.reduce((a, r) => a + r.grand, 0);
-  return { res, f, custo, venda: custo * f, miss: res.reduce((a, r) => a + r.miss, 0) };
+  return { res, f, cat, custo, venda: r2(res.reduce((a, r) => a + r.venda, 0)), miss: res.reduce((a, r) => a + r.miss, 0) };
 }
 function cotSelOpts(sel, withNew){
   let h = cot.list.map((c, i) => '<option value="' + esc(c.id) + '"' + (c.id === cot.atual ? " selected" : "") + ">" + esc(cotNome(c, i)) + " (" + c.itens.length + ")</option>").join("");
@@ -1199,10 +1214,12 @@ function cotRenderBody(){
     return;
   }
   const v = (id, x) => ' id="' + id + '" value="' + esc(x == null ? "" : x) + '"';
-  let h = '<div class="two"><div><label for="cf-cliente">Cliente</label><input type="text"' + v("cf-cliente", c.cliente) + ' maxlength="120" autocomplete="off"></div>' +
+  let h = '<p class="note" style="margin:12px 0 0">Cotação nº <b>' + esc(cotNum(c)) + '</b></p>' +
+    '<div class="two"><div><label for="cf-cliente">Cliente</label><input type="text"' + v("cf-cliente", c.cliente) + ' maxlength="120" autocomplete="off"></div>' +
     '<div><label for="cf-obra">Obra ou assunto</label><input type="text"' + v("cf-obra", c.obra) + ' maxlength="120" autocomplete="off"></div></div>' +
-    '<div class="two three"><div><label for="cf-resp">Elaborado por</label><input type="text"' + v("cf-resp", c.resp) + ' maxlength="80" autocomplete="off"></div>' +
-    '<div><label for="cf-bdi">BDI desta cotação (%)</label><input type="text" inputmode="decimal"' + v("cf-bdi", String(c.bdi).replace(".", ",")) + '></div>' +
+    '<div class="two"><div><label for="cf-data">Data da cotação</label><input type="date"' + v("cf-data", c.data) + '></div>' +
+    '<div><label for="cf-resp">Responsável técnico (opcional)</label><input type="text"' + v("cf-resp", c.resp) + ' maxlength="80" autocomplete="off"></div></div>' +
+    '<div class="two"><div><label for="cf-bdi">BDI desta cotação (%)</label><input type="text" inputmode="decimal"' + v("cf-bdi", String(c.bdi).replace(".", ",")) + '></div>' +
     '<div><label for="cf-val">Validade (dias)</label><input type="text" inputmode="numeric"' + v("cf-val", c.validade) + '></div></div>' +
     '<div style="margin-top:10px"><label for="cf-obs">Observações (aparecem no PDF)</label><textarea id="cf-obs" maxlength="600">' + esc(c.obs) + '</textarea></div>' +
     '<h3 style="margin-top:18px">Serviços da cotação</h3><div id="cot-itens"></div><div id="cot-tot"></div>' +
@@ -1262,7 +1279,7 @@ $("cot-sel").addEventListener("change", e => { cot.atual = e.target.value; cotSa
 $("cot-new").onclick = () => { cotNova(); cotRender().then(() => { const f = $("cf-cliente"); if (f) f.focus(); }); };
 $("cot-dup").onclick = () => {
   const c = cotAtual(); if (!c) return;
-  const n = JSON.parse(JSON.stringify(c)); n.id = cotId(); n.criado = Date.now(); n.cliente = (c.cliente || "Cotação") + " (cópia)";
+  const n = JSON.parse(JSON.stringify(c)); n.id = cotId(); n.criado = Date.now(); n.num = ""; n.data = cotHoje(); cotNum(n); n.cliente = (c.cliente || "Cotação") + " (cópia)";
   cot.list.push(n); cot.atual = n.id; cotSave(); cotRender();
 };
 $("cot-del").onclick = () => {
@@ -1275,6 +1292,7 @@ $("cot-body").addEventListener("input", e => {
   if (t.id === "cf-cliente") c.cliente = t.value;
   else if (t.id === "cf-obra") c.obra = t.value;
   else if (t.id === "cf-resp") c.resp = t.value;
+  else if (t.id === "cf-data") c.data = t.value;
   else if (t.id === "cf-obs") c.obs = t.value;
   else if (t.id === "cf-val") c.validade = Math.max(0, Math.round(num(t.value)));
   else if (t.id === "cf-bdi"){ c.bdi = Math.max(0, num(t.value)); cotSave(); cotUpdateVals(); return; }
@@ -1305,139 +1323,188 @@ renderAddCot();
 
 /* PDF da cotação */
 function cotMsg(t, bad){ const e = $("cot-msg"); if (e){ e.textContent = t || ""; e.style.color = bad ? "#b3261e" : ""; } }
-function pdfSrc(x){ return x.src === "manual" ? "valor informado por você" : (x.src || ""); }
-function pdfComp(doc, y, r, it, f, BLUE, GREY, RED, M, W){
-  const q = it.qty, un = unitPretty(it.un), body = [];
+const EMPRESA = { nome:"Raydem Rabello Engenharia", crea:"Crea-BA 051950106-3", end:"Avenida Apolônio Sales, 500, CEP 48601-208, Paulo Afonso, Bahia" };
+const CAT_PDF = { mo:"Mão de obra", mat:"Materiais", eqp:"Equipamentos, máquinas e ferramentas", srv:"Serviços e especiais", aux:"Outros (composições auxiliares)" };
+const PDF_C = { navy:[18,42,76], blue:[0,103,192], grey:[90,98,108], line:[205,211,219], soft:[245,247,250], tint:[232,238,246], red:[179,38,30] };
+function pdfComp(doc, y, r, it){
+  const M = 14, q = it.qty, un = unitPretty(it.un), body = [], C = PDF_C;
   GROUPS.forEach(g => {
     const its = r.rows.filter(x => x.t === g[0]);
     if (!its.length) return;
-    body.push([{ content:g[1], colSpan:9, styles:{ fillColor:[232,238,246], fontStyle:"bold", textColor:30 } }]);
+    body.push([{ content:CAT_PDF[g[0]], colSpan:7, styles:{ fillColor:C.tint, fontStyle:"bold", textColor:C.navy } }]);
     its.forEach(x => {
       body.push([cleanCod(x.cod) || "-", x.desc, unitPretty(x.un), fmt(x.total / q, 4), fmt(x.total, 4),
-        x.p > 0 ? fmt(x.p, 2) : { content:"sem preço", styles:{ textColor:RED, fontStyle:"bold" } },
-        fmt(x.cost, 2), fmt(x.cost * f, 2), pdfSrc(x)]);
+        x.p > 0 ? fmt(x.pv, 2) : { content:"sem preço", styles:{ textColor:C.red, fontStyle:"bold" } }, fmt(x.cv, 2)]);
     });
-    body.push([{ content:"Subtotal - " + g[1], colSpan:6, styles:{ halign:"right", fontStyle:"bold" } },
-      { content:fmt(r.tot[g[0]], 2), styles:{ fontStyle:"bold" } }, { content:fmt(r.tot[g[0]] * f, 2), styles:{ fontStyle:"bold" } }, ""]);
+    body.push([{ content:"Subtotal - " + CAT_PDF[g[0]], colSpan:6, styles:{ halign:"right", fontStyle:"bold" } }, { content:fmt(r.cv[g[0]], 2), styles:{ fontStyle:"bold" } }]);
   });
-  const fl = [245,247,250];
-  body.push([{ content:"Total do serviço (custo direto e com BDI)", colSpan:6, styles:{ halign:"right", fontStyle:"bold", fillColor:fl } },
-    { content:fmt(r.grand, 2), styles:{ fontStyle:"bold", fillColor:fl } }, { content:fmt(r.venda, 2), styles:{ fontStyle:"bold", fillColor:fl } }, { content:"", styles:{ fillColor:fl } }]);
+  body.push([{ content:"TOTAL DO SERVIÇO (BDI incluso)", colSpan:6, styles:{ halign:"right", fontStyle:"bold", fillColor:C.tint, textColor:C.navy } },
+    { content:fmt(r.venda, 2), styles:{ fontStyle:"bold", fillColor:C.tint, textColor:C.navy } }]);
   const opt = {
-    margin:{ left:M, right:M, bottom:14 }, theme:"grid",
-    styles:{ fontSize:8, cellPadding:1.5, lineColor:[210,214,220], lineWidth:0.2, textColor:30, overflow:"linebreak", valign:"middle" },
-    headStyles:{ fillColor:BLUE, textColor:255, fontStyle:"bold", halign:"center" },
-    columnStyles:{ 0:{ cellWidth:17, halign:"center" }, 1:{ cellWidth:75 }, 2:{ cellWidth:15, halign:"center" }, 3:{ cellWidth:20, halign:"right" },
-      4:{ cellWidth:23, halign:"right" }, 5:{ cellWidth:22, halign:"right" }, 6:{ cellWidth:25, halign:"right" }, 7:{ cellWidth:25, halign:"right" },
-      8:{ cellWidth:"auto", fontSize:6.5, textColor:GREY } },
-    head:[["Código", "Descrição", "Un.", "Coef. por " + un, "Qtd. total", "Preço unit. (R$)", "Custo (R$)", "Com BDI (R$)", "Origem do preço"]],
+    margin:{ left:M, right:M, top:20, bottom:20 }, theme:"grid",
+    styles:{ fontSize:7.5, cellPadding:1.4, lineColor:C.line, lineWidth:0.2, textColor:30, overflow:"linebreak", valign:"middle" },
+    headStyles:{ fillColor:C.navy, textColor:255, fontStyle:"bold", halign:"center" },
+    columnStyles:{ 0:{ cellWidth:15, halign:"center" }, 1:{ cellWidth:"auto" }, 2:{ cellWidth:13, halign:"center" }, 3:{ cellWidth:19, halign:"right" },
+      4:{ cellWidth:21, halign:"right" }, 5:{ cellWidth:23, halign:"right" }, 6:{ cellWidth:25, halign:"right" } },
+    head:[["Código", "Descrição", "Un.", "Coef. por " + un, "Qtd. total", "Preço unit. (R$)", "Total (R$)"]],
     rowPageBreak:"avoid"
   };
   /* o final (último insumo + subtotal + total) vai sempre junto, para não sobrar uma página só com totais */
-  if (body.length <= 4){ doc.autoTable(Object.assign({ startY:y, body, showHead:"everyPage" }, opt)); return doc.lastAutoTable.finalY; }
+  if (body.length <= 4){ doc.autoTable(Object.assign({ startY:y, body, showHead:"everyPage" }, opt)); return; }
   doc.autoTable(Object.assign({ startY:y, body:body.slice(0, -3), showHead:"everyPage" }, opt));
   let y2 = doc.lastAutoTable.finalY, head = "never";
-  if (y2 + 30 > 210 - 14){ doc.addPage(); y2 = 16; head = "firstPage"; }
+  if (y2 + 30 > 297 - 20){ doc.addPage(); y2 = 22; head = "firstPage"; }
   doc.autoTable(Object.assign({ startY:y2, body:body.slice(-3), showHead:head }, opt));
-  return doc.lastAutoTable.finalY;
 }
 function cotBuild(c, k){
   const J = window.jspdf && window.jspdf.jsPDF;
   if (!J) throw new Error("A biblioteca de PDF não carregou. Atualize a página e tente de novo.");
-  const doc = new J({ orientation:"landscape", unit:"mm", format:"a4" });
-  const W = 297, M = 12, UW = W - 2 * M, f = k.f, now = new Date();
-  const BLUE = [0, 103, 192], GREY = [90, 98, 108], RED = [179, 38, 30];
-  const dataTxt = now.toLocaleDateString("pt-BR");
+  const doc = new J({ orientation:"portrait", unit:"mm", format:"a4" });
+  const W = 210, H = 297, M = 14, UW = W - 2 * M, C = PDF_C, num = cotNum(c);
+  const dt = cotDate(c), dataTxt = dt.toLocaleDateString("pt-BR");
+  const dataLonga = dt.toLocaleDateString("pt-BR", { day:"numeric", month:"long", year:"numeric" });
+  const val = new Date(dt.getTime() + (c.validade || 0) * 86400000);
   const bases = Array.from(new Set(c.itens.map(i => i.base)));
-  const baseTxt = bases.map(b => b === "sinapi" ? "SINAPI-BA, " + refTxt() + " (" + (settings.deson === "cd" ? "com" : "sem") + " desoneração)" : "ORSE-SE (base importada)").join(" | ");
-
-  doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]); doc.rect(0, 0, W, 17, "F");
-  doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text("QUANTIFIK", M, 11);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text("Cotação de preços", W - M, 11, { align:"right" });
-
-  let y = 25;
-  const left = [], right = [];
-  if (c.cliente) left.push(["Cliente", c.cliente]);
-  if (c.obra) left.push(["Obra / assunto", c.obra]);
-  if (c.resp) left.push(["Elaborado por", c.resp]);
-  left.push(["Data", dataTxt]);
-  if (c.validade > 0) left.push(["Validade", c.validade + " dias"]);
-  right.push(["Base de preços", baseTxt]);
-  right.push(["Encargos sociais (m. de obra)", fmt(settings.enc, 2) + "%"]);
-  right.push(["BDI", fmt(c.bdi || 0, 2) + "%"]);
-  doc.setFontSize(10);
-  const rows = Math.max(left.length, right.length);
-  for (let i = 0; i < rows; i++){
-    [[left[i], M, 30, 120], [right[i], 150, 52, UW + M - 150]].forEach(a => {
-      if (!a[0]) return;
-      doc.setFont("helvetica", "bold"); doc.setTextColor(GREY[0], GREY[1], GREY[2]); doc.text(a[0][0] + ":", a[1], y);
-      doc.setFont("helvetica", "normal"); doc.setTextColor(30);
-      doc.text(doc.splitTextToSize(String(a[0][1]), a[3] - a[2])[0], a[1] + a[2], y);
-    });
-    y += 5.5;
-  }
-  y += 1; doc.setDrawColor(200); doc.line(M, y, W - M, y); y += 4;
-
+  const baseTxt = bases.map(b => b === "sinapi" ? "SINAPI-BA, " + refTxt().replace("referência ", "ref. ") + " (" + (settings.deson === "cd" ? "com" : "sem") + " desoneração)" : "ORSE-SE").join(" e ");
   const money = n => fmt(n, 2);
+  const need = (y, h) => { if (y + h > H - 20){ doc.addPage(); return 22; } return y; };
+  const section = (t, y) => {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(C.navy[0], C.navy[1], C.navy[2]); doc.text(t, M, y);
+    doc.setDrawColor(C.blue[0], C.blue[1], C.blue[2]); doc.setLineWidth(0.5); doc.line(M, y + 1.8, W - M, y + 1.8); doc.setLineWidth(0.2);
+    return y + 6;
+  };
+
+  /* título e identificação */
+  let y = 46;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(C.navy[0], C.navy[1], C.navy[2]);
+  doc.text("COTAÇÃO DE PREÇOS", W / 2, y, { align:"center" });
+  doc.setFontSize(10); doc.setTextColor(C.grey[0], C.grey[1], C.grey[2]); doc.setFont("helvetica", "normal");
+  doc.text("Nº " + num, W / 2, y + 6, { align:"center" });
+  y += 12;
+  const colW = (UW - 12) / 2, xL = M + 4, xR = M + 8 + colW;
+  const kv = (x, yy, label, value) => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(C.grey[0], C.grey[1], C.grey[2]); doc.text(label.toUpperCase(), x, yy);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(30);
+    const ls = doc.splitTextToSize(String(value || "-"), colW).slice(0, 3);
+    doc.text(ls, x, yy + 4.6);
+    return 4.6 + ls.length * 4.4 + 3;
+  };
+  const L = [["Cliente", c.cliente], ["Obra / assunto", c.obra]];
+  const R = [["Data da cotação", dataTxt], ["Validade da proposta", (c.validade > 0 ? c.validade + " dias (até " + val.toLocaleDateString("pt-BR") + ")" : "-")]];
+  const hb = [];
+  for (let i = 0; i < 2; i++){
+    const doc2 = doc; const a = doc2.splitTextToSize(String(L[i][1] || "-"), colW).slice(0, 3).length, b = doc2.splitTextToSize(String(R[i][1] || "-"), colW).slice(0, 3).length;
+    hb.push(4.6 + Math.max(a, b) * 4.4 + 3);
+  }
+  const boxH = hb[0] + hb[1] + 5;
+  doc.setFillColor(C.soft[0], C.soft[1], C.soft[2]); doc.setDrawColor(C.line[0], C.line[1], C.line[2]); doc.roundedRect(M, y, UW, boxH, 1.5, 1.5, "FD");
+  let yy = y + 6;
+  for (let i = 0; i < 2; i++){ kv(xL, yy, L[i][0], L[i][1]); kv(xR, yy, R[i][0], R[i][1]); yy += hb[i]; }
+  y += boxH + 8;
+
+  /* serviços cotados */
+  y = section("SERVIÇOS COTADOS", y);
   const body = c.itens.map((it, i) => {
     const r = k.res[i];
-    return [String(i + 1), it.cod || "-", it.desc + "\n" + it.med, unitPretty(it.un), fmt(it.qty, 4),
-      it.qty > 0 ? money(r.venda / it.qty) : "-", money(r.venda)];
+    return [String(i + 1), it.cod || "-", it.desc, unitPretty(it.un), fmt(it.qty, 2), it.qty > 0 ? money(r.venda / it.qty) : "-", money(r.venda)];
   });
-  const fl = [232,238,246];
-  const foot = [];
-  if (c.det){
-    foot.push([{ content:"Custo direto", colSpan:6, styles:{ halign:"right" } }, money(k.custo)]);
-    foot.push([{ content:"BDI de " + fmt(c.bdi || 0, 2) + "%", colSpan:6, styles:{ halign:"right" } }, money(k.venda - k.custo)]);
-  }
-  foot.push([{ content:"TOTAL DA COTAÇÃO (R$)", colSpan:6, styles:{ halign:"right", fontStyle:"bold", fillColor:fl } }, { content:money(k.venda), styles:{ fontStyle:"bold", fillColor:fl } }]);
   doc.autoTable({
-    startY:y, margin:{ left:M, right:M, bottom:14 }, theme:"grid",
-    styles:{ fontSize:8.5, cellPadding:1.8, lineColor:[210,214,220], lineWidth:0.2, textColor:30, overflow:"linebreak", valign:"middle" },
-    headStyles:{ fillColor:BLUE, textColor:255, fontStyle:"bold", halign:"center" },
-    columnStyles:{ 0:{ cellWidth:10, halign:"center" }, 1:{ cellWidth:20, halign:"center" }, 2:{ cellWidth:"auto" }, 3:{ cellWidth:14, halign:"center" },
-      4:{ cellWidth:26, halign:"right" }, 5:{ cellWidth:34, halign:"right" }, 6:{ cellWidth:34, halign:"right" } },
-    head:[["Item", "Código", "Descrição do serviço", "Un.", "Quantidade", "Preço unit. (R$)", "Total (R$)"]],
-    body, foot, footStyles:{ fillColor:[245,247,250], textColor:30, fontStyle:"normal", halign:"right" }, showFoot:"lastPage", rowPageBreak:"avoid"
+    startY:y, margin:{ left:M, right:M, top:20, bottom:20 }, theme:"grid",
+    styles:{ fontSize:8.5, cellPadding:2, lineColor:C.line, lineWidth:0.2, textColor:30, overflow:"linebreak", valign:"middle" },
+    headStyles:{ fillColor:C.navy, textColor:255, fontStyle:"bold", halign:"center" },
+    columnStyles:{ 0:{ cellWidth:10, halign:"center" }, 1:{ cellWidth:17, halign:"center" }, 2:{ cellWidth:"auto" }, 3:{ cellWidth:12, halign:"center" },
+      4:{ cellWidth:19, halign:"right" }, 5:{ cellWidth:25, halign:"right" }, 6:{ cellWidth:28, halign:"right" } },
+    head:[["Item", "Código", "Descrição do serviço", "Un.", "Qtd.", "Preço unit. (R$)", "Total (R$)"]],
+    body, rowPageBreak:"avoid", showHead:"everyPage",
+    foot:[[{ content:"TOTAL DA COTAÇÃO (R$)", colSpan:6, styles:{ halign:"right" } }, money(k.venda)]],
+    footStyles:{ fillColor:C.tint, textColor:C.navy, fontStyle:"bold", fontSize:9.5, halign:"right" }, showFoot:"lastPage"
   });
-  y = doc.lastAutoTable.finalY + 6;
-  if (k.miss){
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(RED[0], RED[1], RED[2]);
-    doc.text("Atenção: " + k.miss + (k.miss > 1 ? " itens estão" : " item está") + " sem preço; os totais estão incompletos.", M, y); y += 6;
-  }
-  if (c.obs && c.obs.trim()){
-    if (y > 180){ doc.addPage(); y = 16; }
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(30); doc.text("Observações", M, y); y += 5;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-    const o = doc.splitTextToSize(c.obs.trim(), UW); doc.text(o, M, y); y += o.length * 4.3 + 3;
-  }
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(GREY[0], GREY[1], GREY[2]);
-  if (y > 195){ doc.addPage(); y = 16; }
-  const nota = doc.splitTextToSize("Valores calculados pelo QUANTIFIK a partir dos coeficientes das composições da base indicada, com mão de obra pelo piso Sinduscon-BA e os encargos acima. Preços de referência: confira antes de formalizar proposta ou contrato.", UW);
-  doc.text(nota, M, y);
+  y = doc.lastAutoTable.finalY + 9;
 
+  /* resumo por natureza de custo */
+  const cats = Object.keys(CAT_PDF).filter(t => k.cat[t] > 0);
+  y = need(y, 14 + (cats.length + 2) * 7);
+  y = section("RESUMO POR NATUREZA DE CUSTO (BDI incluso)", y);
+  doc.autoTable({
+    startY:y, margin:{ left:M, right:M, top:20, bottom:20 }, theme:"grid",
+    styles:{ fontSize:8.5, cellPadding:2, lineColor:C.line, lineWidth:0.2, textColor:30 },
+    headStyles:{ fillColor:C.navy, textColor:255, fontStyle:"bold", halign:"center" },
+    columnStyles:{ 0:{ cellWidth:"auto" }, 1:{ cellWidth:36, halign:"right" }, 2:{ cellWidth:26, halign:"right" } },
+    head:[["Natureza do custo", "Valor (R$)", "% do total"]],
+    body: cats.map(t => [CAT_PDF[t], money(k.cat[t]), k.venda > 0 ? fmt(k.cat[t] / k.venda * 100, 2) + "%" : "-"]),
+    foot:[["TOTAL", money(k.venda), "100,00%"]],
+    footStyles:{ fillColor:C.tint, textColor:C.navy, fontStyle:"bold", halign:"right" }, showFoot:"lastPage"
+  });
+  y = doc.lastAutoTable.finalY + 9;
+  if (k.miss){
+    y = need(y, 8);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(C.red[0], C.red[1], C.red[2]);
+    doc.text("Atenção: " + k.miss + (k.miss > 1 ? " itens estão" : " item está") + " sem preço; os valores estão incompletos.", M, y); y += 8;
+  }
+
+  /* condições */
+  const conds = ["Os preços unitários e totais apresentados já incluem BDI.",
+    "Base de preços: " + baseTxt + ".",
+    c.validade > 0 ? "Proposta válida por " + c.validade + " dias, até " + val.toLocaleDateString("pt-BR") + "." : ""].filter(Boolean);
+  if (c.obs && c.obs.trim()) c.obs.trim().split(/\n+/).forEach(l => conds.push(l.trim()));
+  const lines = conds.map(t => doc.splitTextToSize("•  " + t, UW - 4));
+  const hc = lines.reduce((a, l) => a + l.length * 4.4, 0);
+  y = need(y, 12 + hc + 52);   /* condições e assinatura ficam juntas na mesma página */
+  y = section("OBSERVAÇÕES E CONDIÇÕES", y);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40);
+  lines.forEach(l => { doc.text(l, M + 2, y); y += l.length * 4.4 + 0.6; });
+  y += 10;
+
+  /* assinatura */
+  y = need(y, 42);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(40);
+  doc.text("Paulo Afonso - BA, " + dataLonga + ".", M, y);
+  y += 20;
+  doc.setDrawColor(60); doc.setLineWidth(0.3); doc.line(W / 2 - 40, y, W / 2 + 40, y); doc.setLineWidth(0.2);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text(EMPRESA.nome, W / 2, y + 5, { align:"center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text(EMPRESA.crea, W / 2, y + 10, { align:"center" });
+  if (c.resp && c.resp.trim()) doc.text("Responsável técnico: " + c.resp.trim(), W / 2, y + 15, { align:"center" });
+
+  /* composição de cada serviço */
   if (c.det){
     c.itens.forEach((it, i) => {
       const r = k.res[i]; if (r.falta) return;
       doc.addPage();
-      doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
-      const t = doc.splitTextToSize("Item " + (i + 1) + " - " + (it.cod ? it.cod + " - " : "") + it.desc, UW);
-      doc.text(t, M, 18);
-      let yy = 18 + t.length * 5;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(GREY[0], GREY[1], GREY[2]);
-      doc.text("Composição de custos | Quantidade: " + fmt(it.qty, 4) + " " + unitPretty(it.un) + " | Medidas: " + it.med + " | Custo direto R$ " + money(r.grand) + " | Com BDI R$ " + money(r.venda), M, yy);
-      pdfComp(doc, yy + 4, r, it, f, BLUE, GREY, RED, M, W);
+      let y3 = 24;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(C.blue[0], C.blue[1], C.blue[2]);
+      doc.text("COMPOSIÇÃO DE PREÇO - SERVIÇO " + (i + 1) + " DE " + c.itens.length + (it.cod ? "  |  CÓDIGO " + it.cod : ""), M, y3); y3 += 5;
+      doc.setFontSize(10.5); doc.setTextColor(30);
+      const t = doc.splitTextToSize(it.desc, UW); doc.text(t, M, y3); y3 += t.length * 5;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(C.grey[0], C.grey[1], C.grey[2]);
+      const m = doc.splitTextToSize("Quantidade: " + fmt(it.qty, 2) + " " + unitPretty(it.un) + "   |   Medidas: " + it.med, UW); doc.text(m, M, y3); y3 += m.length * 4.2;
+      doc.setFont("helvetica", "bold"); doc.setTextColor(C.navy[0], C.navy[1], C.navy[2]);
+      doc.text("Preço unitário: R$ " + money(it.qty > 0 ? r.venda / it.qty : 0) + " por " + unitPretty(it.un) + "   |   Total: R$ " + money(r.venda) + " (BDI incluso)", M, y3 + 1);
+      pdfComp(doc, y3 + 5, r, it);
     });
   }
+
+  /* cabeçalho e rodapé de todas as páginas */
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++){
-    doc.setPage(i); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(GREY[0], GREY[1], GREY[2]);
-    doc.text("QUANTIFIK  |  " + (c.cliente || c.obra || "Cotação") + "  |  " + dataTxt, M, 205);
-    doc.text("Página " + i + " de " + n, W - M, 205, { align:"right" });
+    doc.setPage(i);
+    doc.setFillColor(C.navy[0], C.navy[1], C.navy[2]);
+    if (i === 1){
+      doc.rect(0, 0, W, 34, "F"); doc.setFillColor(C.blue[0], C.blue[1], C.blue[2]); doc.rect(0, 34, W, 1.6, "F");
+      doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(19); doc.text(EMPRESA.nome, M, 15);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.text(EMPRESA.crea, M, 22);
+      doc.setFontSize(8.5); doc.text(EMPRESA.end, M, 27.5);
+    } else {
+      doc.rect(0, 0, W, 13, "F");
+      doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.text(EMPRESA.nome, M, 8.3);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.text("Cotação nº " + num + (c.cliente ? "  |  " + c.cliente : ""), W - M, 8.3, { align:"right" });
+    }
+    doc.setDrawColor(C.line[0], C.line[1], C.line[2]); doc.setLineWidth(0.2); doc.line(M, H - 13, W - M, H - 13);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(C.grey[0], C.grey[1], C.grey[2]);
+    doc.text(EMPRESA.nome + "  |  " + EMPRESA.crea + "  |  " + EMPRESA.end, M, H - 8.5);
+    doc.text("Página " + i + " de " + n, W - M, H - 8.5, { align:"right" });
   }
   const slug = String(c.cliente || c.obra || "cotacao").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "cotacao";
-  const iso = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
-  return { blob:doc.output("blob"), name:"Cotacao_" + slug + "_" + iso + ".pdf", titulo:"Cotação" + (c.cliente ? " - " + c.cliente : "") };
+  return { blob:doc.output("blob"), name:"Cotacao_" + num.replace("/", "-") + "_" + slug + ".pdf", titulo:"Cotação " + num + (c.cliente ? " - " + c.cliente : "") };
 }
 function pdfBaixar(file){
   const url = URL.createObjectURL(file), a = document.createElement("a");
