@@ -473,6 +473,16 @@ pre{background:var(--field);border:1px solid var(--line);border-radius:6px;paddi
         <button type="button" class="btn sm" id="cot-del">Excluir</button>
       </div>
       <div id="cot-body"></div>
+      <div class="addcot">
+        <h3>Cópia de segurança</h3>
+        <p class="note" style="margin:0">As cotações ficam guardadas só neste aparelho. Exporte para um arquivo para guardar ou levar para outro celular, e importe de volta quando precisar.</p>
+        <div class="acts">
+          <button type="button" class="btn sm" id="cot-exp">Exportar cotações</button>
+          <label class="btn sm" for="cot-imp">Importar cotações</label>
+          <input type="file" id="cot-imp" accept=".json,application/json" hidden>
+        </div>
+        <p class="hint" id="cot-bk" role="status"></p>
+      </div>
     </section>
 
     <section class="card" id="sec-ajuda" data-tab="ajuda" aria-labelledby="h-ajuda">
@@ -1321,6 +1331,49 @@ $("ac-add").onclick = async () => {
 };
 renderAddCot();
 
+/* exportar e importar cotações */
+function bkMsg(t, bad){ const e = $("cot-bk"); if (e){ e.textContent = t || ""; e.style.color = bad ? "#b3261e" : ""; } }
+function cotLimpa(o){
+  const t = (v, n) => String(v == null ? "" : v).slice(0, n), nn = (v, d) => { const x = Number(v); return isFinite(x) ? x : d; };
+  if (!o || typeof o !== "object" || !Array.isArray(o.itens)) return null;
+  const itens = o.itens.filter(i => i && (i.base === "sinapi" || i.base === "orse")).map(i => ({
+    base:i.base, cod:t(i.cod, 40), desc:t(i.desc, 400), un:t(i.un, 20), qty:Math.max(0, nn(i.qty, 0)), med:t(i.med, 200) }));
+  return { id:t(o.id, 40) || cotId(), cliente:t(o.cliente, 120), obra:t(o.obra, 120), resp:t(o.resp, 80),
+    data:/^\d{4}-\d{2}-\d{2}$/.test(String(o.data)) ? o.data : cotHoje(), validade:Math.max(0, Math.round(nn(o.validade, 30))),
+    bdi:Math.max(0, nn(o.bdi, 0)), obs:t(o.obs, 600), det:o.det !== false, num:t(o.num, 20), criado:nn(o.criado, Date.now()), itens };
+}
+$("cot-exp").onclick = () => {
+  if (!cot.list.length){ bkMsg("Não há cotações para exportar.", true); return; }
+  cot.list.forEach(c => cotNum(c));
+  const dados = { app:"quantifik-cotacoes", v:1, exportado:new Date().toISOString(), seq:cot.seq || 0, list:cot.list };
+  const file = new File([JSON.stringify(dados)], "Cotacoes_QUANTIFIK_" + cotHoje() + ".json", { type:"application/json" });
+  pdfBaixar(file);
+  bkMsg(cot.list.length + (cot.list.length > 1 ? " cotações exportadas" : " cotação exportada") + " em " + file.name + " (pasta Downloads).");
+};
+$("cot-imp").onchange = async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try{
+    const obj = JSON.parse(await f.text());
+    if (!obj || obj.app !== "quantifik-cotacoes" || !Array.isArray(obj.list)) throw new Error("este arquivo não é uma exportação de cotações do QUANTIFIK");
+    let add = 0, dup = 0, last = null;
+    obj.list.forEach(raw => {
+      const c = cotLimpa(raw); if (!c) return;
+      const ex = cot.list.find(x => x.id === c.id);
+      if (ex){
+        if (JSON.stringify(Object.assign({}, ex, { num:"" })) === JSON.stringify(Object.assign({}, c, { num:"" }))){ dup++; return; }
+        c.id = cotId(); c.cliente = (c.cliente || "Cotação") + " (importada)"; c.num = "";
+      }
+      if (c.num && cot.list.some(x => x.num === c.num)) c.num = "";
+      cot.list.push(c); cotNum(c); add++; last = c;
+    });
+    cot.seq = Math.max(cot.seq || 0, Math.round(Number(obj.seq) || 0));
+    if (last) cot.atual = last.id;
+    cotSave(); await cotRender();
+    bkMsg(add + (add === 1 ? " cotação importada" : " cotações importadas") + (dup ? "; " + dup + " já existia" + (dup > 1 ? "m" : "") + " e foi ignorada" + (dup > 1 ? "s" : "") : "") + ".", !add && !dup);
+  }catch(err){ bkMsg("Não consegui importar: " + (err && err.message ? err.message : err), true); }
+};
+
 /* PDF da cotação */
 function cotMsg(t, bad){ const e = $("cot-msg"); if (e){ e.textContent = t || ""; e.style.color = bad ? "#b3261e" : ""; } }
 const EMPRESA = { nome:"Raydem Rabello Engenharia", crea:"Crea-BA 051950106-3", end:"Avenida Apolônio Sales, 500, CEP 48601-208, Paulo Afonso, Bahia" };
@@ -1344,7 +1397,7 @@ function pdfComp(doc, y, r, it){
     margin:{ left:M, right:M, top:20, bottom:20 }, theme:"grid",
     styles:{ fontSize:7.5, cellPadding:1.4, lineColor:C.line, lineWidth:0.2, textColor:30, overflow:"linebreak", valign:"middle" },
     headStyles:{ fillColor:C.navy, textColor:255, fontStyle:"bold", halign:"center" },
-    columnStyles:{ 0:{ cellWidth:15, halign:"center" }, 1:{ cellWidth:"auto" }, 2:{ cellWidth:13, halign:"center" }, 3:{ cellWidth:19, halign:"right" },
+    columnStyles:{ 0:{ cellWidth:20, halign:"center" }, 1:{ cellWidth:"auto" }, 2:{ cellWidth:13, halign:"center" }, 3:{ cellWidth:19, halign:"right" },
       4:{ cellWidth:21, halign:"right" }, 5:{ cellWidth:23, halign:"right" }, 6:{ cellWidth:25, halign:"right" } },
     head:[["Código", "Descrição", "Un.", "Coef. por " + un, "Qtd. total", "Preço unit. (R$)", "Total (R$)"]],
     rowPageBreak:"avoid"
@@ -1412,7 +1465,7 @@ function cotBuild(c, k){
     startY:y, margin:{ left:M, right:M, top:20, bottom:20 }, theme:"grid",
     styles:{ fontSize:8.5, cellPadding:2, lineColor:C.line, lineWidth:0.2, textColor:30, overflow:"linebreak", valign:"middle" },
     headStyles:{ fillColor:C.navy, textColor:255, fontStyle:"bold", halign:"center" },
-    columnStyles:{ 0:{ cellWidth:10, halign:"center" }, 1:{ cellWidth:17, halign:"center" }, 2:{ cellWidth:"auto" }, 3:{ cellWidth:12, halign:"center" },
+    columnStyles:{ 0:{ cellWidth:10, halign:"center" }, 1:{ cellWidth:24, halign:"center" }, 2:{ cellWidth:"auto" }, 3:{ cellWidth:12, halign:"center" },
       4:{ cellWidth:19, halign:"right" }, 5:{ cellWidth:25, halign:"right" }, 6:{ cellWidth:28, halign:"right" } },
     head:[["Item", "Código", "Descrição do serviço", "Un.", "Qtd.", "Preço unit. (R$)", "Total (R$)"]],
     body, rowPageBreak:"avoid", showHead:"everyPage",
