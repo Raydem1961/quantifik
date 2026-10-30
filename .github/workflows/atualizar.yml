@@ -1,0 +1,80 @@
+name: Atualizar SINAPI e publicar o QUANTIFIK
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 8 * * *"       # todo dia; só altera algo quando a Caixa publica um mês novo
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: "Reconstruir mesmo que o mês seja o mesmo"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  issues: write
+
+concurrency:
+  group: quantifik
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openpyxl requests
+      - name: Baixar o SINAPI da Caixa e reconstruir a base
+        run: |
+          if [ "${{ inputs.forcar }}" = "true" ]; then python build_quantifik.py --force; else python build_quantifik.py; fi
+      - name: Gravar se algo mudou
+        run: |
+          git config user.name "QUANTIFIK Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html sw.js status.json
+          if git diff --cached --quiet; then
+            echo "Sem alterações."
+          else
+            git commit -m "Atualiza base SINAPI-BA ($(date -u +%F))"
+            git push
+          fi
+      - name: Avisar se falhou
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          T="Falha na atualização automática do SINAPI"
+          if [ -z "$(gh issue list --state open --search "$T in:title" --json number --jq '.[0].number')" ]; then
+            gh issue create --title "$T" --body "A atualização automática falhou. O app continua com a última base válida. Veja o motivo em Actions > ${{ github.workflow }} > execução de hoje. Plano B: envie o .zip do mês para a pasta fontes/ (nome SINAPI-AAAA-MM-formato-xlsx.zip)."
+          fi
+
+  publicar:
+    needs: [atualizar]
+    if: ${{ always() && (needs.atualizar.result == 'success' || needs.atualizar.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Montar o site
+        run: |
+          mkdir _site
+          cp index.html sw.js manifest.webmanifest xlsx.full.min.js jszip.min.js *.png _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

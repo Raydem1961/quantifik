@@ -1,0 +1,3 @@
+Plano B (só use se o download automático da Caixa falhar):
+coloque aqui o .zip do mês, com o nome SINAPI-AAAA-MM-formato-xlsx.zip (por exemplo SINAPI-2026-09-formato-xlsx.zip).
+Na próxima execução o robô usa esse arquivo se ele for mais novo que a base do app.
