@@ -71,7 +71,7 @@ jobs:
       - name: Montar o site
         run: |
           mkdir _site
-          cp index.html sw.js manifest.webmanifest xlsx.full.min.js jszip.min.js *.png _site/
+          cp index.html sw.js manifest.webmanifest xlsx.full.min.js jszip.min.js jspdf.umd.min.js jspdf.plugin.autotable.min.js *.png _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
