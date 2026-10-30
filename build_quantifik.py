@@ -12,7 +12,7 @@ Lê SINAPI_Referência_AAAA_MM.xlsx (relatório mensal da Caixa, formato XLSX):
   Linhas Horista / Mensalista das abas acima: encargos sociais por UF
 Nunca grava zero no lugar de preço ausente. Se algo parecer errado, não altera o index.html e sai com código 2.
 """
-import argparse, datetime, json, os, re, sys, tempfile, unicodedata, zipfile, collections
+import argparse, datetime, json, os, re, sys, tempfile, time, unicodedata, zipfile, collections
 
 UF = "BA"
 URL = os.environ.get("QUANTIFIK_URL", "https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/SINAPI-{y}-{m}-formato-xlsx.zip")
@@ -303,11 +303,19 @@ def baixar(ref_atual):
                 raise Falha("não consegui verificar meses novos na Caixa: " + "; ".join(problemas))
             return None, ref_atual   # confirmado: o mais novo já está no app
         url = URL.format(y=a, m=f"{m:02d}")
-        try:
-            r = s.get(url, timeout=90, stream=True)
-        except Exception as e:
+        r, erro = None, ""
+        for tentativa in range(3):          # a Caixa às vezes oscila: 3 tentativas com espera
+            try:
+                r = s.get(url, timeout=90, stream=True)
+                if r.status_code < 500 and r.status_code != 429:
+                    break
+                erro = f"HTTP {r.status_code}"
+            except Exception as e:
+                r, erro = None, str(e)[:120]
+            time.sleep(5 * (tentativa + 1))
+        if r is None:
             problemas.append(f"{ref}: erro de rede")
-            print(f"  {ref}: erro de rede ({str(e)[:120]})")
+            print(f"  {ref}: erro de rede ({erro})")
             continue
         if r.status_code == 404:
             print(f"  {ref}: ainda não publicado")
