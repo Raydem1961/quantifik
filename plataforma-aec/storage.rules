@@ -14,7 +14,7 @@ service firebase.storage {
       allow create: if equipe(tenantId)
         && request.resource.metadata.uid == request.auth.uid // autoria não pode ser forjada
         && request.resource.size < 300 * 1024 * 1024
-        && arquivo.matches('(?i).*\\.(dwg|dxf|csv|xml)$');
+        && arquivo.matches('(?i).*\\.(dwg|dxf|csv|xml|ifc|inp|txt|landxml)$');
       allow delete: if gestor(tenantId);
     }
 

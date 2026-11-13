@@ -5,17 +5,15 @@ import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge, Field, Input, Segmented, Select, Textarea } from '@/components/ui/form';
+import { Badge, Field, Input, Select, Textarea } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
 import { adicionarDoc } from '@/hooks/use-colecao';
 import { gerarEscopo, PROGRAMA_POR_TIPOLOGIA, type BriefingInput, type EscopoTecnico, type Topografia } from '@/lib/briefing/scope';
 import { num } from '@/lib/format';
 import { pode } from '@/lib/rbac';
-import { DISCIPLINA_LABEL, UFS, type Tipologia, type UF } from '@/lib/types';
+import { DISCIPLINA_LABEL, TIPOLOGIA_LABEL, TIPOLOGIAS_INFRA, UFS, type Tipologia, type UF } from '@/lib/types';
 
-const TIPOLOGIAS: { value: Tipologia; label: string }[] = [
-  { value: 'residencial', label: 'Residencial' }, { value: 'comercial', label: 'Comercial' }, { value: 'industrial', label: 'Industrial' }, { value: 'infraestrutura', label: 'Infraestrutura / Loteamento' },
-];
+const TIPOLOGIAS = Object.keys(TIPOLOGIA_LABEL) as Tipologia[];
 const n = (s: string) => { const v = Number(s.replace(',', '.')); return Number.isFinite(v) ? v : 0; };
 
 export default function Briefing() {
@@ -32,7 +30,7 @@ export default function Briefing() {
   const escopo = React.useMemo((): EscopoTecnico | { erro: string } => {
     try { return gerarEscopo(b); } catch (e) { return { erro: e instanceof Error ? e.message : 'Dados insuficientes.' }; }
   }, [b]);
-  const infra = b.tipologia === 'infraestrutura';
+  const infra = TIPOLOGIAS_INFRA.includes(b.tipologia);
 
   const salvar = async () => {
     if (!tenantId || 'erro' in escopo) return;
@@ -69,15 +67,18 @@ export default function Briefing() {
               <Field label="Cliente"><Input value={id.cliente} onChange={(e) => setId({ ...id, cliente: e.target.value })} /></Field>
               <Field label="Município"><Input value={id.municipio} onChange={(e) => setId({ ...id, municipio: e.target.value })} /></Field>
               <Field label="UF"><Select value={id.uf} onChange={(e) => setId({ ...id, uf: e.target.value as UF })}>{UFS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
-              <div className="sm:col-span-2"><p className="mb-1.5 text-xs font-medium text-muted-foreground">Tipologia</p>
-                <Segmented className="flex-wrap" value={b.tipologia} onChange={(t) => setB((x) => ({ ...x, tipologia: t, programa: {} }))} options={TIPOLOGIAS} /></div>
+              <Field label="Tipologia" className="sm:col-span-2">
+                <Select value={b.tipologia} onChange={(e) => setB((x) => ({ ...x, tipologia: e.target.value as Tipologia, programa: {} }))}>
+                  {TIPOLOGIAS.map((t) => <option key={t} value={t}>{TIPOLOGIA_LABEL[t]}</option>)}
+                </Select>
+              </Field>
             </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Terreno e restrições legais</CardTitle><CardDescription>Parâmetros da lei de uso e ocupação do solo do município.</CardDescription></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-3">
-              <Field label="Área do terreno (m²)"><Input type="number" min={0} value={b.areaTerrenoM2} onChange={(e) => set('areaTerrenoM2', n(e.target.value))} /></Field>
-              <Field label={infra ? 'Área de intervenção (m²)' : 'Área pretendida (m²)'}><Input type="number" min={0} value={b.areaPretendidaM2} onChange={(e) => set('areaPretendidaM2', n(e.target.value))} /></Field>
+              <Field label={infra ? 'Área da gleba / faixa (m²)' : 'Área do terreno (m²)'}><Input type="number" min={0} value={b.areaTerrenoM2} onChange={(e) => set('areaTerrenoM2', n(e.target.value))} /></Field>
+              {!infra && <Field label="Área pretendida (m²)"><Input type="number" min={0} value={b.areaPretendidaM2} onChange={(e) => set('areaPretendidaM2', n(e.target.value))} /></Field>}
               {!infra && <Field label="Pavimentos"><Input type="number" min={1} value={b.pavimentos} onChange={(e) => set('pavimentos', n(e.target.value))} /></Field>}
               {!infra && <Field label="Taxa de ocupação máx. (%)"><Input type="number" min={0} max={100} value={+(b.taxaOcupacaoMax * 100).toFixed(2)} onChange={(e) => set('taxaOcupacaoMax', n(e.target.value) / 100)} /></Field>}
               {!infra && <Field label="Coef. de aproveitamento máx."><Input type="number" min={0} step="0.1" value={b.coeficienteAproveitamentoMax} onChange={(e) => set('coeficienteAproveitamentoMax', n(e.target.value))} /></Field>}

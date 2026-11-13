@@ -88,7 +88,8 @@ try {
   )
   foreach ($p in $pastas) { New-Item -ItemType Directory -Force -Path (Join-Path $Raiz $p) | Out-Null }
   # Pasta local espelhada pelo sync-cad.ps1: <PastaCad>\<projectId>\<disciplina>\arquivo.dwg
-  foreach ($d in 'arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico', 'terraplenagem') {
+  foreach ($d in 'arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico', 'topografia', 'terraplenagem',
+    'urbanismo', 'pavimentacao', 'drenagem', 'esgotamento', 'abastecimento_agua') {
     New-Item -ItemType Directory -Force -Path (Join-Path $PastaCad "_modelo/$d") | Out-Null
   }
   Write-Ok "Projeto em $Raiz"

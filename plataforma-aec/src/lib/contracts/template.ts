@@ -9,7 +9,7 @@
  * Formatação leve do corpo: "# Título", "## Subtítulo", "**negrito**" e parágrafos separados por linha em branco.
  */
 import type { Disciplina } from '../types';
-import { DISCIPLINA_LABEL } from '../types';
+import { DISCIPLINA_LABEL, DISCIPLINAS } from '../types';
 import type { PadraoAcabamento } from '../cub/engine';
 import { PADRAO_LABEL } from '../cub/engine';
 
@@ -27,6 +27,8 @@ export const VARIAVEIS_DISPONIVEIS: { chave: string; descricao: string }[] = [
   { chave: 'area_construida', descricao: 'Área construída (m²)' },
   { chave: 'padrao_acabamento', descricao: 'Padrão de acabamento' },
   { chave: 'valor_total_cub', descricao: 'Estimativa de obra pelo CUB' },
+  { chave: 'valor_total_analitico', descricao: 'Estimativa por composições (SINAPI/SICRO/ORSE)' },
+  { chave: 'base_precos', descricao: 'Base de preços usada' },
   { chave: 'valor_honorarios', descricao: 'Honorários de projeto' },
   { chave: 'disciplinas_lista', descricao: 'Disciplinas contratadas' },
   { chave: 'cronograma_etapas', descricao: 'Cronograma por etapas' },
@@ -103,7 +105,7 @@ export function contextoDeEscopo(disciplinas: Disciplina[], padrao: PadraoAcabam
     padrao_acabamento: PADRAO_LABEL[padrao],
     disciplinas_lista: disciplinas.map((d) => DISCIPLINA_LABEL[d]).join(', '),
   };
-  for (const d of ['arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico', 'terraplenagem'] as Disciplina[]) {
+  for (const d of DISCIPLINAS) {
     ctx[`tem_${d}`] = disciplinas.includes(d);
   }
   return ctx;
@@ -121,7 +123,9 @@ export const MODELO_CONTRATO_PADRAO = `# CONTRATO DE PRESTAÇÃO DE SERVIÇOS T�
 
 ## 1. Objeto
 
-1.1. A CONTRATADA elaborará os projetos do empreendimento **{{projeto_nome}}**, em {{projeto_local}}, com área construída estimada de {{area_construida}} m², padrão de acabamento **{{padrao_acabamento}}**, nas disciplinas: {{disciplinas_lista}}.
+{{#se estimativa_cub}}1.1. A CONTRATADA elaborará os projetos do empreendimento **{{projeto_nome}}**, em {{projeto_local}}, com área construída estimada de {{area_construida}} m², padrão de acabamento **{{padrao_acabamento}}**, nas disciplinas: {{disciplinas_lista}}.{{/se}}
+
+{{#senao estimativa_cub}}1.1. A CONTRATADA elaborará os projetos do empreendimento **{{projeto_nome}}**, em {{projeto_local}}, nas disciplinas: {{disciplinas_lista}}.{{/senao}}
 
 {{#se tem_arquitetonico}}1.2. O projeto arquitetônico compreende estudo preliminar, anteprojeto, projeto legal e projeto executivo, conforme a ABNT NBR 16636.{{/se}}
 
@@ -133,9 +137,23 @@ export const MODELO_CONTRATO_PADRAO = `# CONTRATO DE PRESTAÇÃO DE SERVIÇOS T�
 
 {{#se tem_terraplenagem}}1.6. O projeto de terraplenagem será elaborado sobre levantamento planialtimétrico fornecido pelo CONTRATANTE; os volumes de corte e aterro são estimativos e sujeitos a confirmação em campo.{{/se}}
 
+{{#se tem_topografia}}1.7. O levantamento topográfico seguirá a ABNT NBR 13133; divergências entre o levantamento e os títulos de propriedade serão comunicadas ao CONTRATANTE para regularização.{{/se}}
+
+{{#se tem_urbanismo}}1.8. O projeto urbanístico será desenvolvido conforme as diretrizes expedidas pela prefeitura; alterações de diretrizes após o protocolo serão tratadas como serviço adicional.{{/se}}
+
+{{#se tem_abastecimento_agua}}1.9. O projeto da rede de abastecimento de água atende à ABNT NBR 12218 e às normas da concessionária local.{{/se}}
+
+{{#se tem_esgotamento}}1.10. O projeto de esgotamento sanitário atende à ABNT NBR 9649 e depende da definição do ponto de lançamento ou interligação pela concessionária.{{/se}}
+
+{{#se tem_drenagem}}1.11. O projeto de drenagem pluvial adotará os critérios hidrológicos do município (tempo de retorno e equação de chuvas).{{/se}}
+
+{{#se tem_pavimentacao}}1.12. O projeto de pavimentação depende de estudos geotécnicos (CBR do subleito) fornecidos pelo CONTRATANTE.{{/se}}
+
 ## 2. Estimativa de custo da obra
 
-2.1. A estimativa de custo da obra, de **{{valor_total_cub}}**, foi calculada pelo Custo Unitário Básico (CUB/m²) e pelas áreas equivalentes da ABNT NBR 12721. Trata-se de referência paramétrica e não substitui o orçamento analítico.
+{{#se estimativa_cub}}2.1. A estimativa de custo da obra, de **{{valor_total_cub}}**, foi calculada pelo Custo Unitário Básico (CUB/m²) e pelas áreas equivalentes da ABNT NBR 12721. Trata-se de referência paramétrica e não substitui o orçamento analítico.{{/se}}
+
+{{#se estimativa_analitica}}2.1. A estimativa de custo da obra, de **{{valor_total_analitico}}**, foi calculada por composições de preços unitários da base {{base_precos}}, aplicadas aos quantitativos extraídos dos arquivos de projeto. Os quantitativos são os do estágio atual do projeto e serão atualizados a cada revisão.{{/se}}
 
 {{#se padrao=alto_luxo}}2.2. Por se tratar de padrão Alto Luxo, a estimativa inclui fatores de ajuste para acabamentos importados e automação, cujos preços dependem de especificação e câmbio na data da compra.{{/se}}
 

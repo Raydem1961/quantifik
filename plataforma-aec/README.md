@@ -1,8 +1,11 @@
 # Plataforma AEC — Gestão Integrada de Projetos, CAD/QTO e Orçamento CUB
 
-SaaS B2B multi-tenant para escritórios de arquitetura e engenharia: briefing paramétrico, upload
-versionado de CAD com extração de quantitativos, orçamento pelo CUB estadual (NBR 12721), contratos
-com variáveis dinâmicas, PDF vetorial e assinatura digital.
+SaaS B2B multi-tenant para escritórios de arquitetura e engenharia: briefing paramétrico, importação
+de CAD, BIM e redes com extração de quantitativos, orçamento pelo CUB estadual (NBR 12721) ou por
+composições SINAPI/SICRO/ORSE, contratos com variáveis dinâmicas, PDF vetorial e assinatura digital.
+
+**Tipologias:** residencial, comercial, industrial, condomínio horizontal e vertical, loteamento,
+infraestrutura viária, topografia, saneamento (esgoto e drenagem) e redes de abastecimento de água.
 
 **Stack:** Next.js 14 (App Router, exportação estática) · TypeScript · Tailwind + componentes no padrão
 shadcn/ui · Firebase (Auth, Firestore, Storage, Functions 2ª geração, Hosting) · PowerShell.
@@ -50,14 +53,17 @@ plataforma-aec/
 │  │  ├─ cub/schedule.ts       Curva S, cronograma físico-financeiro, Curva ABC
 │  │  ├─ cad/dxf-qto.ts        parser DXF + quantitativos por camada
 │  │  ├─ cad/civil3d.ts        volumes de corte/aterro (CSV e LandXML)
+│  │  ├─ import/               importador universal: ifc, redes (.inp), landxml, tabelas, exemplos
+│  │  ├─ orcamento/            analitico.ts (vínculos, busca, cálculo) · bases.ts (catálogo de preços)
+│  │  ├─ urbanismo/quadro.ts   quadro de áreas de loteamento
 │  │  ├─ briefing/scope.ts     briefing → escopo e entregáveis
 │  │  ├─ contracts/template.ts variáveis e cláusulas condicionais
 │  │  ├─ signature/hash.ts     SHA-256 e envelope de assinatura
 │  │  └─ rbac.ts · format.ts · demo-data.ts · firebase/client.ts
 │  ├─ hooks/                   use-auth (claims), use-colecao (onSnapshot), use-workspace
 │  ├─ components/              ui/ · layout/ · dashboard/ · budget/ · cad/ · contracts/
-│  └─ app/(app)/               dashboard · briefing · cad · orcamento · contratos   (+ /login)
-├─ tests/core.test.ts · tests/rules/firestore.rules.test.ts
+│  └─ app/(app)/               dashboard · briefing · cad · quantitativos · orcamento · contratos   (+ /login)
+├─ tests/core.test.ts · tests/importacao.test.ts · tests/rules/firestore.rules.test.ts
 └─ data/cub-modelo.csv
 ```
 
@@ -73,12 +79,14 @@ tenants/{tenantId}                         razão social, CNPJ, branding, RT (CR
  ├─ members/{uid}                          nome, email, role, projectIds          (escrita: função definirPapel)
  ├─ clients/{clientId}
  ├─ cubOverrides/{UF}_{AAAA-MM}            ajustes do tenant sobre o CUB oficial   (auditado)
+ ├─ vinculos/{id}                          chave do item, fonte, codigo, fator, estado=confirmado
  ├─ notifications/{id}                     tipo, titulo, mensagem, lidaPor[], destinatarios[]
  ├─ auditLogs/{id}                         acao, recurso, caminho, uid, antes, depois, em   (imutável)
  └─ projects/{projectId}                   codigo, nome, tipologia, status, disciplinas[], prazos, clienteUids[]
      ├─ briefings/{id}                     entradas + escopo gerado
      ├─ files/{fileId}                     nome, disciplina, revisaoAtual, totalRevisoes
      │   └─ versions/{R00|R01|…}           storagePath, sha256, qtoStatus, qto        (imutável)
+     ├─ quantities/{arquivo}               formato, itens[], avisos, resumo, revisao
      ├─ redlines/{id}                      pontos em coordenadas do desenho, autorUid
      ├─ budgets/{id}                       entradas, resultado, status (rascunho→enviado→aprovado)
      ├─ contracts/{id}                     template, variaveis, status, sha256, assinatura
@@ -107,6 +115,36 @@ revisão é atribuída em transação pela função `processarUploadCad`) e `…
 | Projetista | ler | enviar | ler | — | próprias | — |
 | Cliente | os seus | ler | ler enviados/aprovar | ler os seus | — | — |
 
+## Importação universal e orçamento analítico
+
+Tela **BIM & Orçamento analítico** (`/quantitativos`). Todo arquivo vira uma lista de itens no mesmo
+modelo (`src/lib/import/modelo.ts`), gravada em `projects/{id}/quantities/{arquivo}`.
+
+| Formato | Origem típica | O que é extraído |
+|---|---|---|
+| `.ifc` (IFC2x3 / IFC4) | Revit, Archicad, Tekla, TQS, Eberick, QiBuilder | Elementos por classe e tipo; comprimento, área, volume e peso das *Base Quantities* |
+| `.dxf` | AutoCAD, BricsCAD, ZWCAD, QGIS | Áreas, perímetros e comprimentos por camada; contagem de blocos |
+| `.xml` / `.landxml` | Civil 3D, TopoGRAPH, OpenRoads, estações totais | Lotes, eixos, superfícies, redes de tubos, poços, corte/aterro |
+| `.inp` EPANET | EPANET, QWater, WaterGEMS, UFC | Rede de água por diâmetro, válvulas, reservatórios, bombas |
+| `.inp` SWMM | SWMM, QEsg, SewerGEMS | Coletores por diâmetro, PVs por profundidade, sub-bacias |
+| `.csv` / `.txt` de pontos | Estação total, GNSS | Área levantada, pontos, cadastro por código |
+| `.csv` de volumes | Civil 3D | Corte, aterro, bota-fora/empréstimo |
+| `.csv` de quantitativos | Tabelas de qualquer software | Descrição, unidade, quantidade e código de composição |
+
+Formatos nativos binários (`.rvt`, `.pln`, `.nwd`, `.dwg`, `.xlsx`) não são lidos: a tela informa
+qual exportação fazer em cada caso.
+
+**Preços.** As bases vêm do catálogo público `obratop-bases` (SINAPI, SICRO 3 e ORSE por UF, mês e
+regime), configurável em `NEXT_PUBLIC_BASES_CATALOG_URL`.
+
+**Vínculos.** Cada item é ligado a uma composição por um vínculo, resolvido nesta ordem: vínculo já
+confirmado pelo escritório → código que veio na planilha → sugestão por semelhança de texto. Sugestões
+**não entram no preço** até um orçamentista confirmar; confirmado uma vez, o vínculo vale para todos
+os projetos. Números da descrição (DN, espessura, fck) são obrigatórios na busca.
+
+**Tempo real.** A tela assina `quantities` e `vinculos` com `onSnapshot`: uma nova revisão enviada
+(pela tela, pelo `sync-cad.ps1` ou por um colega) recalcula o orçamento de todos na hora.
+
 ## Convenção de camadas para o QTO
 
 Desenhe uma polilinha fechada por ambiente nas camadas abaixo e o quadro de áreas do orçamento é
@@ -119,6 +157,14 @@ preenchido automaticamente (regras em `REGRAS_CAMADAS_PADRAO`, customizáveis):
 
 - **CUB:** o repositório não traz valores oficiais. As tabelas do modo demo e `data/cub-modelo.csv`
   são ilustrativas; importe a planilha do Sinduscon do seu estado todo mês.
+- **Sugestões de composição:** vêm de semelhança de texto e erram com frequência em serviços
+  parecidos (tubo predial × rede coletora, fornecimento × assentamento). Por isso ficam fora do
+  total até serem confirmadas. Itens como "nó de rede" ou "área de parcelas" não têm composição
+  direta e servem de conferência.
+- **IFC:** lê quantidades gravadas no modelo, não calcula geometria. Sem *Base Quantities* só há
+  contagem. Arquivos muito grandes (centenas de MB) são lidos inteiros em memória.
+- **Pontos topográficos:** a área é a da envoltória convexa, que superestima perímetros côncavos.
+- **Quadro urbanístico** (`urbanismo/quadro.ts`): motor pronto e testado, ainda sem tela.
 - **DWG:** é binário proprietário. A plataforma armazena e versiona; os quantitativos saem do DXF
   (`sync-cad.ps1 -ConverterDxf` gera via AutoCAD) ou da conversão APS, que exige credenciais Autodesk.
 - **Visualizador:** Canvas 2D do model space (linhas, polilinhas, arcos, círculos, elipses,

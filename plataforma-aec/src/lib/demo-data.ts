@@ -21,7 +21,7 @@ export const DEMO_PROJECTS: Project[] = [
   { id: 'p1', codigo: 'RES-041', nome: 'Residência Alto da Colina', clientId: 'c1', clienteNome: 'Cliente A', tipologia: 'residencial', status: 'anteprojeto', uf: 'BA', municipio: 'Salvador', disciplinas: ['arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico'], areaConstruidaM2: 420, valorContratado: 96000, inicio: iso(-70), fim: iso(60), progresso: 45, clienteUids: [] },
   { id: 'p2', codigo: 'COM-017', nome: 'Edifício Comercial Orla', clientId: 'c2', clienteNome: 'Cliente B', tipologia: 'comercial', status: 'projeto_executivo', uf: 'BA', municipio: 'Lauro de Freitas', disciplinas: ['arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico', 'terraplenagem'], areaConstruidaM2: 3800, valorContratado: 412000, inicio: iso(-150), fim: iso(35), progresso: 78, clienteUids: [] },
   { id: 'p3', codigo: 'IND-006', nome: 'Galpão Logístico BR-324', clientId: 'c3', clienteNome: 'Cliente C', tipologia: 'industrial', status: 'estudo_preliminar', uf: 'BA', municipio: 'Simões Filho', disciplinas: ['arquitetonico', 'estrutural', 'eletrico', 'terraplenagem'], areaConstruidaM2: 6200, valorContratado: 238000, inicio: iso(-20), fim: iso(140), progresso: 15, clienteUids: [] },
-  { id: 'p4', codigo: 'INF-003', nome: 'Loteamento Reserva das Águas', clientId: 'c4', clienteNome: 'Cliente D', tipologia: 'infraestrutura', status: 'aprovacao', uf: 'BA', municipio: 'Camaçari', disciplinas: ['terraplenagem', 'hidrossanitario', 'eletrico'], areaConstruidaM2: 0, valorContratado: 185000, inicio: iso(-200), fim: iso(12), progresso: 92, clienteUids: [] },
+  { id: 'p4', codigo: 'INF-003', nome: 'Loteamento Reserva das Águas', clientId: 'c4', clienteNome: 'Cliente D', tipologia: 'loteamento', status: 'aprovacao', uf: 'BA', municipio: 'Camaçari', disciplinas: ['topografia', 'urbanismo', 'terraplenagem', 'pavimentacao', 'drenagem', 'esgotamento', 'abastecimento_agua'], areaConstruidaM2: 0, valorContratado: 185000, inicio: iso(-200), fim: iso(12), progresso: 92, clienteUids: [] },
   { id: 'p5', codigo: 'RES-044', nome: 'Casa de Praia Guarajuba', clientId: 'c5', clienteNome: 'Cliente E', tipologia: 'residencial', status: 'briefing', uf: 'BA', municipio: 'Camaçari', disciplinas: ['arquitetonico'], areaConstruidaM2: 310, valorContratado: 54000, inicio: iso(-5), fim: iso(110), progresso: 5, clienteUids: [] },
   { id: 'p6', codigo: 'RES-038', nome: 'Reforma Cobertura Barra', clientId: 'c6', clienteNome: 'Cliente F', tipologia: 'residencial', status: 'concluido', uf: 'BA', municipio: 'Salvador', disciplinas: ['arquitetonico', 'eletrico'], areaConstruidaM2: 180, valorContratado: 38000, inicio: iso(-240), fim: iso(-25), progresso: 100, clienteUids: [] },
 ];
@@ -30,7 +30,7 @@ export const DEMO_ART: ArtRrt[] = [
   { id: 'a1', projectId: 'p2', projetoNome: 'Edifício Comercial Orla', tipo: 'ART', disciplina: 'estrutural', etapa: 'Projeto executivo', responsavel: 'Eng. Responsável Demo', status: 'a_emitir', valorTaxa: 271.47, vencimento: iso(-2) },
   { id: 'a2', projectId: 'p1', projetoNome: 'Residência Alto da Colina', tipo: 'RRT', disciplina: 'arquitetonico', etapa: 'Anteprojeto', responsavel: 'Arq. Demo', status: 'emitida', valorTaxa: 125.38, vencimento: iso(4) },
   { id: 'a3', projectId: 'p3', projetoNome: 'Galpão Logístico BR-324', tipo: 'ART', disciplina: 'terraplenagem', etapa: 'Estudo preliminar', responsavel: 'Eng. Responsável Demo', status: 'a_emitir', valorTaxa: 108.69, vencimento: iso(18) },
-  { id: 'a4', projectId: 'p4', projetoNome: 'Loteamento Reserva das Águas', tipo: 'ART', disciplina: 'hidrossanitario', etapa: 'Aprovação', numero: 'BA20260000000', responsavel: 'Eng. Responsável Demo', status: 'vinculada', valorTaxa: 271.47, vencimento: iso(-40) },
+  { id: 'a4', projectId: 'p4', projetoNome: 'Loteamento Reserva das Águas', tipo: 'ART', disciplina: 'esgotamento', etapa: 'Aprovação', numero: 'BA20260000000', responsavel: 'Eng. Responsável Demo', status: 'vinculada', valorTaxa: 271.47, vencimento: iso(-40) },
 ];
 
 const h = (projectId: string, disciplina: TimesheetEntry['disciplina'], horas: number, i: number): TimesheetEntry => ({
@@ -40,7 +40,7 @@ export const DEMO_TIMESHEETS: TimesheetEntry[] = [
   h('p1', 'arquitetonico', 310, 1), h('p1', 'estrutural', 120, 2), h('p1', 'eletrico', 40, 3),
   h('p2', 'arquitetonico', 1450, 1), h('p2', 'estrutural', 1320, 2), h('p2', 'hidrossanitario', 780, 3), h('p2', 'eletrico', 690, 4),
   h('p3', 'arquitetonico', 190, 1), h('p3', 'terraplenagem', 85, 2),
-  h('p4', 'terraplenagem', 1100, 1), h('p4', 'hidrossanitario', 640, 2), h('p4', 'eletrico', 420, 3),
+  h('p4', 'terraplenagem', 1100, 1), h('p4', 'esgotamento', 640, 2), h('p4', 'drenagem', 420, 3),
   h('p5', 'arquitetonico', 22, 1), h('p6', 'arquitetonico', 260, 30), h('p6', 'eletrico', 70, 31),
 ];
 

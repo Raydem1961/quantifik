@@ -14,9 +14,9 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { enviarParaOss, iniciarTraducao, obterToken } from './aps';
-import { parseCivil3d } from './shared/cad/civil3d';
 import { extrairQto, mapearCamadasParaAreas, parseDxf } from './shared/cad/dxf-qto';
-import type { Role } from './shared/types';
+import { importarArquivo } from './shared/import';
+import type { Disciplina, Role } from './shared/types';
 
 initializeApp();
 setGlobalOptions({ region: 'southamerica-east1', maxInstances: 10 });
@@ -43,7 +43,7 @@ async function notificar(tenantId: string, n: { tipo: TipoNotificacao; titulo: s
 
 // ───────────────────── 1. Upload de CAD → versionamento + QTO ─────────────────────
 
-const RE_CAD = /^tenants\/([^/]+)\/projects\/([^/]+)\/cad\/([^/]+)\/(?:[^/]*__)?([^/]+\.(dwg|dxf|csv|xml))$/i;
+const RE_CAD = /^tenants\/([^/]+)\/projects\/([^/]+)\/cad\/([^/]+)\/(?:[^/]*__)?([^/]+\.(dwg|dxf|csv|xml|ifc|inp|txt|landxml))$/i;
 
 export const processarUploadCad = onObjectFinalized(
   { memory: '1GiB', timeoutSeconds: 300, secrets: [APS_CLIENT_ID, APS_CLIENT_SECRET] },
@@ -81,12 +81,17 @@ export const processarUploadCad = onObjectFinalized(
     const versaoRef = fileRef.collection('versions').doc(resultado);
 
     try {
-      if (extensao === 'dxf') {
-        const qto = extrairQto(parseDxf(conteudo.toString('utf8')));
-        await versaoRef.update({ qtoStatus: 'processado', qto: { ...qto, areasOrcamento: mapearCamadasParaAreas(qto) } });
-      } else if (extensao === 'csv' || extensao === 'xml') {
-        const volumes = parseCivil3d(nomeArquivo, conteudo.toString('utf8'));
-        await versaoRef.update({ qtoStatus: 'processado', qto: { terraplenagem: volumes } });
+      if (extensao !== 'dwg') {
+        const texto = conteudo.toString('utf8');
+        // Quantitativos unificados (alimentam o orçamento analítico em tempo real via onSnapshot).
+        const importado = importarArquivo(nomeArquivo, texto, { disciplina: disciplina as Disciplina });
+        if (importado.itens.length > 5000) throw new Error(`Arquivo gera ${importado.itens.length} itens; o limite é 5.000. Divida o modelo por disciplina.`);
+        await db.doc(`tenants/${tenantId}/projects/${projectId}/quantities/${slug(nomeArquivo)}`).set({
+          ...importado, tenantId, revisao: resultado, importadoEm: agora(), importadoPor: uid,
+        });
+        // DXF mantém também o QTO detalhado por camada e as áreas NBR 12721 para o orçamento CUB.
+        const detalhe = extensao === 'dxf' ? (() => { const qto = extrairQto(parseDxf(texto)); return { ...qto, areasOrcamento: mapearCamadasParaAreas(qto) }; })() : undefined;
+        await versaoRef.update({ qtoStatus: 'processado', qto: detalhe ?? null, resumo: importado.resumo, avisos: importado.avisos, formato: importado.formato });
       } else if (APS_BUCKET.value() && APS_CLIENT_ID.value()) {
         const token = await obterToken(APS_CLIENT_ID.value(), APS_CLIENT_SECRET.value());
         const urn = await enviarParaOss(token, APS_BUCKET.value(), `${tenantId}_${projectId}_${fileId}_${resultado}.dwg`, conteudo);

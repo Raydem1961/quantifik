@@ -11,7 +11,7 @@ import { Badge, Field, Input, Segmented, Select } from '@/components/ui/form';
 import { useWorkspace } from '@/hooks/use-workspace';
 import {
   AJUSTE_ALTO_LUXO_PADRAO, BDI_PADRAO, calcularBdi, calcularOrcamento, COEFICIENTES_NBR12721, PADRAO_LABEL, simularCenarios, tabelaMaisRecente,
-  type AreaInput, type BdiParams, type CubTable, type ItemNaoIncluso, type PadraoAcabamento, type TipoArea, type TipoEdificacao,
+  CUB_PROJECT_CODES, type AreaInput, type BdiParams, type CubProjectCode, type CubTable, type ItemNaoIncluso, type PadraoAcabamento, type TipoArea, type TipoEdificacao,
 } from '@/lib/cub/engine';
 import { gerarCronogramaFisicoFinanceiro, gerarCurvaAbc } from '@/lib/cub/schedule';
 import { DEMO_CUB } from '@/lib/demo-data';
@@ -53,6 +53,8 @@ export default function Orcamento() {
   const [adicionais, setAdicionais] = React.useState(AJUSTE_ALTO_LUXO_PADRAO.adicionaisPorM2);
   const [extras, setExtras] = React.useState<ItemNaoIncluso[]>([{ descricao: 'Fundações especiais', tipo: 'percentual', valor: 0.04 }]);
   const [prazo, setPrazo] = React.useState(14);
+  // '' = projeto-padrão derivado de padrão + tipo; senão, um código específico (R16-N, CSL-8-N, GI…).
+  const [projetoCub, setProjetoCub] = React.useState<CubProjectCode | ''>('');
 
   // Áreas vindas do QTO do CAD (botão "Usar no orçamento" da tela de CAD).
   React.useEffect(() => {
@@ -69,7 +71,7 @@ export default function Orcamento() {
     if (!tabela) return { ok: false, erro: 'Nenhuma tabela CUB disponível. Importe a planilha do Sinduscon (scripts/import-cub.ps1).' } as const;
     try {
       const base = { tabela, tipoEdificacao: tipo, areas: areas.filter((a) => a.areaRealM2 > 0), bdi, itensNaoInclusos: extras, ajusteAltoLuxo: { fatorMultiplicador: fator, adicionaisPorM2: adicionais } };
-      const resultado = calcularOrcamento({ ...base, padrao });
+      const resultado = calcularOrcamento({ ...base, padrao, projetoCub: projetoCub || undefined });
       const { cenarios, indisponiveis } = simularCenarios(base, PADROES);
       const meses = Math.max(1, Math.min(120, Math.trunc(prazo) || 1));
       const cronograma = gerarCronogramaFisicoFinanceiro(resultado.precoVenda, meses);
@@ -77,7 +79,7 @@ export default function Orcamento() {
     } catch (e) {
       return { ok: false, erro: e instanceof Error ? e.message : 'Erro no cálculo.' } as const;
     }
-  }, [tabela, tipo, areas, bdi, extras, fator, adicionais, padrao, prazo]);
+  }, [tabela, tipo, areas, bdi, extras, fator, adicionais, padrao, prazo, projetoCub]);
 
   React.useEffect(() => {
     if (calculo.ok) setOrcamento({ resultado: calculo.resultado, cenarios: calculo.cenarios, prazoObraMeses: calculo.meses });
@@ -104,11 +106,18 @@ export default function Orcamento() {
                 <Field label="Tipo de edificação" className="w-48">
                   <Select value={tipo} onChange={(e) => setTipo(e.target.value as TipoEdificacao)}><option value="unifamiliar">Unifamiliar (R1)</option><option value="multifamiliar">Multifamiliar (PP-4 / R8)</option></Select>
                 </Field>
+                <Field label="Projeto-padrão CUB" className="w-56">
+                  <Select value={projetoCub} onChange={(e) => setProjetoCub(e.target.value as CubProjectCode | '')}>
+                    <option value="">Automático (pelo padrão)</option>
+                    {CUB_PROJECT_CODES.filter((c) => tabela?.valores[c]).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </Select>
+                </Field>
                 <Field label="Prazo de obra (meses)" className="w-40"><Input type="number" min={1} max={120} value={prazo} onChange={(e) => setPrazo(numero(e.target.value))} /></Field>
               </div>
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">Padrão de acabamento</p>
                 <Segmented value={padrao} onChange={setPadrao} options={PADROES.map((p) => ({ value: p, label: PADRAO_LABEL[p] }))} />
+                {projetoCub && <p className="mt-1.5 text-xs text-muted-foreground">Projeto-padrão fixado em {projetoCub} (ex.: R16 para torres, CSL para salas e lojas, GI para galpão). O simulador de cenários abaixo continua comparando os padrões residenciais.</p>}
               </div>
               {padrao === 'alto_luxo' && (
                 <div className="space-y-2 rounded-md border bg-muted/40 p-3">

@@ -5,7 +5,7 @@
  * para que Kanban, timesheet e redlines funcionem sem backend.
  */
 import * as React from 'react';
-import { addDoc, collection, collectionGroup, doc, onSnapshot, query, updateDoc, where, type DocumentData } from 'firebase/firestore';
+import { addDoc, collection, collectionGroup, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where, type DocumentData } from 'firebase/firestore';
 import { db, MODO_DEMO } from '@/lib/firebase/client';
 import { DEMO_ART, DEMO_FILES, DEMO_NOTIFICATIONS, DEMO_PROJECTS, DEMO_TIMESHEETS } from '@/lib/demo-data';
 import { useAuth } from './use-auth';
@@ -77,4 +77,29 @@ export async function adicionarDoc(tenantId: string, caminho: string, dados: Doc
   }
   // `tenantId` é gravado no documento: as regras de collectionGroup dependem dele.
   return (await addDoc(collection(db(), 'tenants', tenantId, ...caminho.split('/')), { ...dados, tenantId })).id;
+}
+
+/** Grava (cria ou substitui) um documento com id conhecido — ex.: 'projects/p1/quantities/planta-dxf'. */
+export async function definirDoc(tenantId: string, caminho: string, dados: DocumentData): Promise<void> {
+  if (MODO_DEMO) {
+    const partes = caminho.split('/');
+    const id = partes.pop()!;
+    const chave = chaveDemo(partes.join('/'));
+    memoria.set(chave, [...(memoria.get(chave) ?? []).filter((i) => i.id !== id), { id, ...dados }]);
+    avisar();
+    return;
+  }
+  await setDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), { ...dados, tenantId });
+}
+
+export async function removerDoc(tenantId: string, caminho: string): Promise<void> {
+  if (MODO_DEMO) {
+    const partes = caminho.split('/');
+    const id = partes.pop()!;
+    const chave = chaveDemo(partes.join('/'));
+    memoria.set(chave, (memoria.get(chave) ?? []).filter((i) => i.id !== id));
+    avisar();
+    return;
+  }
+  await deleteDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')));
 }

@@ -3,7 +3,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bell, Building2, Calculator, ClipboardList, FileSignature, LayoutDashboard, LogOut, Moon, PenTool, Sun } from 'lucide-react';
+import { Bell, Boxes, Building2, Calculator, ClipboardList, FileSignature, LayoutDashboard, LogOut, Moon, PenTool, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,6 +16,7 @@ const NAV = [
   { href: '/dashboard/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/briefing/', label: 'Briefing', icon: ClipboardList },
   { href: '/cad/', label: 'CAD & Quantitativos', icon: PenTool },
+  { href: '/quantitativos/', label: 'BIM & Orçamento analítico', icon: Boxes },
   { href: '/orcamento/', label: 'Orçamento CUB', icon: Calculator },
   { href: '/contratos/', label: 'Contratos & PDF', icon: FileSignature },
 ];

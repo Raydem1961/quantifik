@@ -133,3 +133,27 @@ describe('integridade', () => {
     await assertSucceeds(updateDoc(doc(p1, 'tenants/A/notifications/n1'), { lidaPor: ['proj1'] }));
   });
 });
+
+describe('quantitativos e vínculos', () => {
+  const q = { tenantId: 'A', arquivo: 'm.ifc', formato: 'ifc', itens: [], avisos: [], resumo: '' };
+  const v = { tenantId: 'A', chave: 'tubo|m', fonte: 'SINAPI', codigo: '1', fator: 1, estado: 'confirmado' };
+  it('orçamentista grava; projetista só lê; outro tenant não acessa', async () => {
+    const orc = como('orc1', 'A', 'orcamentista');
+    await assertSucceeds(setDoc(doc(orc, 'tenants/A/projects/p1/quantities/m-ifc'), q));
+    await assertSucceeds(setDoc(doc(orc, 'tenants/A/vinculos/v1'), v));
+    const proj = como('proj1', 'A', 'projetista');
+    await assertSucceeds(getDoc(doc(proj, 'tenants/A/projects/p1/quantities/m-ifc')));
+    await assertFails(setDoc(doc(proj, 'tenants/A/vinculos/v2'), v));
+    await assertFails(setDoc(doc(proj, 'tenants/A/projects/p1/quantities/x'), q));
+    const fora = como('uB', 'B', 'socio_diretor');
+    await assertFails(getDoc(doc(fora, 'tenants/A/vinculos/v1')));
+    await assertFails(setDoc(doc(fora, 'tenants/A/vinculos/v1'), v));
+    await assertFails(getDoc(doc(como('cli1', 'A', 'cliente'), 'tenants/A/projects/p1/quantities/m-ifc')));
+  });
+  it('vínculo precisa ser confirmado, com fator positivo e tenant correto', async () => {
+    const orc = como('orc1', 'A', 'orcamentista');
+    await assertFails(setDoc(doc(orc, 'tenants/A/vinculos/v3'), { ...v, estado: 'sugerido' }));
+    await assertFails(setDoc(doc(orc, 'tenants/A/vinculos/v3'), { ...v, fator: 0 }));
+    await assertFails(setDoc(doc(orc, 'tenants/A/vinculos/v3'), { ...v, tenantId: 'B' }));
+  });
+});

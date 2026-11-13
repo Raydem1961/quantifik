@@ -14,11 +14,24 @@ export interface DadosPdf {
   emitidoEm: string;
   empresa: { nome: string; cnpj: string; responsavel: string; registro: string; logoUrl?: string; corPrimaria: string; corSecundaria: string };
   projeto: { nome: string; cliente: string; local: string };
-  orcamento: OrcamentoResultado;
+  /** Estimativa paramétrica pelo CUB (edificações). */
+  orcamento?: OrcamentoResultado;
+  /** Estimativa por composições unitárias (infraestrutura, saneamento, BIM…). */
+  analitico?: AnaliticoPdf;
   cenarios: CenarioWhatIf[];
   cronograma: CronogramaFisicoFinanceiro;
   contrato: BlocoTexto[];
   signatarios: Signatario[];
+}
+
+export interface AnaliticoPdf {
+  base: string;
+  custoDireto: number;
+  bdiPercentual: number;
+  precoVenda: number;
+  itensPendentes: number;
+  porDisciplina: { disciplina: string; total: number }[];
+  linhas: { descricao: string; disciplina: string; unidade: string; quantidade: number; codigo: string; precoUnitario: number; total: number }[];
 }
 
 const brl = (v: number, casas = 2) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}`;
@@ -73,6 +86,8 @@ function CurvaS({ d }: { d: DadosPdf }) {
 
 export function PropostaContratoPdf({ d }: { d: DadosPdf }) {
   const o = d.orcamento;
+  const an = d.analitico;
+  const total = o?.precoVenda ?? an?.precoVenda ?? 0;
   const cor = d.empresa.corPrimaria;
   // Tabela mensal: até 16 meses por faixa para caber na largura da página.
   const faixas: number[][] = [];
@@ -96,12 +111,17 @@ export function PropostaContratoPdf({ d }: { d: DadosPdf }) {
           <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{d.projeto.cliente}</Text>
           <Text style={{ fontSize: 10, color: '#4b5563' }}>{d.projeto.local}</Text>
           <View style={{ flexDirection: 'row', marginTop: 36, gap: 12 }}>
-            {[
+            {(o ? [
               ['Estimativa de obra', brl(o.precoVenda, 0)],
               ['Área construída', `${num(o.areaRealTotalM2)} m²`],
               ['Padrão', PADRAO_LABEL[o.padrao]],
               ['Referência', `${o.projetoCub} · ${o.competencia.split('-').reverse().join('/')}`],
-            ].map(([rotulo, valor]) => (
+            ] : [
+              ['Estimativa de obra', brl(total, 0)],
+              ['Itens orçados', String(an?.linhas.length ?? 0)],
+              ['BDI', pct(an?.bdiPercentual ?? 0, 2)],
+              ['Base de preços', an?.base ?? ''],
+            ]).map(([rotulo, valor]) => (
               <View key={rotulo} style={{ flex: 1, borderTopWidth: 2, borderTopColor: cor, paddingTop: 8 }}>
                 <Text style={{ fontSize: 8, color: '#6b7280' }}>{rotulo}</Text>
                 <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', marginTop: 3 }}>{valor}</Text>
@@ -115,7 +135,7 @@ export function PropostaContratoPdf({ d }: { d: DadosPdf }) {
       </Page>
 
       {/* Memória de cálculo */}
-      <Moldura d={d} titulo="Memória de cálculo">
+      {o && <Moldura d={d} titulo="Memória de cálculo">
         <Text style={s.h1}>Memória de cálculo — CUB e NBR 12721</Text>
         <Text style={s.p}>Estimativa paramétrica pelo Custo Unitário Básico ({o.fonte}, competência {o.competencia.split('-').reverse().join('/')}), projeto-padrão {o.projetoCub}, aplicada às áreas equivalentes calculadas conforme a ABNT NBR 12721:2006.</Text>
         <Text style={s.h2}>1. Quadro de áreas equivalentes</Text>
@@ -143,16 +163,41 @@ export function PropostaContratoPdf({ d }: { d: DadosPdf }) {
         </View>
         {o.avisos.length > 0 && <View style={[s.box, { marginTop: 10, borderColor: '#f59e0b', width: '100%' }]}>{o.avisos.map((a) => <Text key={a} style={{ fontSize: 8.5 }}>Atenção: {a}</Text>)}</View>}
         <Text style={[s.muted, { marginTop: 10 }]}>O CUB não contempla: fundações especiais, elevadores, climatização, paisagismo, projetos, taxas e remuneração do incorporador (NBR 12721, item 8.3.5). Itens aplicáveis foram somados à parte quando indicados acima.</Text>
-      </Moldura>
+      </Moldura>}
+
+      {/* Orçamento analítico */}
+      {an && <Moldura d={d} titulo="Orçamento analítico">
+        <Text style={s.h1}>Orçamento por composições unitárias</Text>
+        <Text style={s.p}>Quantitativos extraídos dos arquivos de projeto (BIM, CAD, redes e levantamentos), precificados pela base {an.base}. Custo direto de {brl(an.custoDireto)} acrescido de BDI de {pct(an.bdiPercentual, 2)}.</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          {an.porDisciplina.filter((x) => x.total > 0).map((x) => (
+            <View key={x.disciplina} style={[s.box, { width: '32%', marginBottom: 6 }]}><Text style={s.muted}>{x.disciplina}</Text><Text style={s.bold}>{brl(x.total, 0)}</Text><Text style={s.muted}>{pct(an.custoDireto > 0 ? x.total / an.custoDireto : 0)}</Text></View>
+          ))}
+        </View>
+        <View style={[s.row, { marginTop: 8 }]} fixed><Text style={[s.th, { width: 52 }]}>Código</Text><Text style={[s.th, { flex: 5 }]}>Serviço</Text><Text style={[s.th, s.right, { flex: 1.6 }]}>Quantidade</Text><Text style={[s.th, s.right, { flex: 1.5 }]}>Preço unit.</Text><Text style={[s.th, s.right, { flex: 1.8 }]}>Total</Text></View>
+        {an.linhas.map((l, i) => (
+          <View key={i} style={s.row} wrap={false}>
+            <Text style={{ width: 52, fontSize: 8 }}>{l.codigo}</Text>
+            <View style={{ flex: 5 }}><Text style={{ fontSize: 8.5 }}>{l.descricao}</Text><Text style={s.muted}>{l.disciplina}</Text></View>
+            <Text style={[s.right, { flex: 1.6, fontSize: 8.5 }]}>{num(l.quantidade)} {l.unidade}</Text>
+            <Text style={[s.right, { flex: 1.5, fontSize: 8.5 }]}>{brl(l.precoUnitario)}</Text>
+            <Text style={[s.right, { flex: 1.8, fontSize: 8.5 }]}>{brl(l.total)}</Text>
+          </View>
+        ))}
+        {([['Custo direto', an.custoDireto], [`BDI (${pct(an.bdiPercentual, 2)})`, an.precoVenda - an.custoDireto], ['Preço de venda', an.precoVenda]] as [string, number][]).map(([r, v]) => (
+          <View key={r} style={s.row} wrap={false}><Text style={[s.bold, { flex: 8 }]}>{r}</Text><Text style={[s.bold, s.right, { flex: 2 }]}>{brl(v)}</Text></View>
+        ))}
+        {an.itensPendentes > 0 && <View style={[s.box, { marginTop: 10, borderColor: '#f59e0b', width: '100%' }]}><Text style={{ fontSize: 8.5 }}>Atenção: {an.itensPendentes} item(ns) do quantitativo ainda não têm composição confirmada e não estão neste total.</Text></View>}
+      </Moldura>}
 
       {/* Cenários + cronograma */}
       <Moldura d={d} titulo="Cenários e cronograma">
-        {d.cenarios.length > 1 && (
+        {o && d.cenarios.length > 1 && (
           <>
             <Text style={s.h1}>Comparativo de padrões de acabamento</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
               {d.cenarios.map((c, i) => {
-                const ativo = c.resultado.padrao === o.padrao;
+                const ativo = c.resultado.padrao === o.padrao && c.resultado.projetoCub === o.projetoCub;
                 return (
                   <View key={c.resultado.padrao} style={[s.box, { width: `${96 / d.cenarios.length}%` }, ativo ? { borderColor: cor, borderWidth: 1.5 } : {}]}>
                     <Text style={s.bold}>{PADRAO_LABEL[c.resultado.padrao]}{ativo ? ' (proposto)' : ''}</Text>

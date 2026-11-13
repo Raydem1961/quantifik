@@ -45,6 +45,16 @@ service cloud.firestore {
         allow write: if socio(tenantId);
       }
 
+      // Item de quantitativo → composição de preço. Vale para todos os projetos do tenant.
+      match /vinculos/{id} {
+        allow read: if equipe(tenantId);
+        allow create, update: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
+          && request.resource.data.tenantId == tenantId
+          && request.resource.data.estado == 'confirmado'
+          && request.resource.data.fator is number && request.resource.data.fator > 0;
+        allow delete: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista']);
+      }
+
       match /projects/{projectId} {
         allow read: if equipe(tenantId)
           || (temPapel(tenantId, ['cliente']) && request.auth.uid in resource.data.clienteUids);
@@ -65,6 +75,15 @@ service cloud.firestore {
             allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
             allow write: if false; // revisões são imutáveis
           }
+        }
+
+        // Quantitativos unificados por arquivo importado (IFC, DXF, LandXML, .inp, planilhas).
+        match /quantities/{id} {
+          allow read: if equipe(tenantId);
+          allow create, update: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
+            && request.resource.data.tenantId == tenantId
+            && request.resource.data.itens is list && request.resource.data.itens.size() <= 5000;
+          allow delete: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista']);
         }
 
         match /redlines/{id} {

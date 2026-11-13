@@ -3,7 +3,7 @@
   Monitora a pasta local de projetos CAD e envia cada arquivo salvo para o Cloud Storage.
 
 .DESCRIPTION
-  Estrutura esperada:  <PastaCad>\<projectId>\<disciplina>\arquivo.(dwg|dxf|csv|xml)
+  Estrutura esperada:  <PastaCad>\<projectId>\<disciplina>\arquivo.(dwg|dxf|ifc|inp|xml|landxml|csv|txt)
   Cada envio vira um objeto novo e imutável; a Cloud Function `processarUploadCad` atribui a
   revisão (R00, R01…), extrai os quantitativos e notifica a equipe.
   Com -ConverterDxf (e AutoCAD instalado), gera também o DXF de cada DWG via accoreconsole,
@@ -24,8 +24,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$Extensoes = @('.dwg', '.dxf', '.csv', '.xml')
-$Disciplinas = @('arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico', 'terraplenagem')
+$Extensoes = @('.dwg', '.dxf', '.csv', '.xml', '.ifc', '.inp', '.txt', '.landxml')
+$Disciplinas = @('arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico', 'topografia', 'terraplenagem',
+  'urbanismo', 'pavimentacao', 'drenagem', 'esgotamento', 'abastecimento_agua')
 
 if (-not (Test-Path $PastaCad)) { throw "Pasta não encontrada: $PastaCad" }
 if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) { throw 'Google Cloud SDK não encontrado: winget install Google.CloudSDK' }

@@ -8,11 +8,13 @@
  *   │    ├─ briefings/{briefingId}
  *   │    ├─ files/{fileId}/versions/{R00|R01|...}
  *   │    ├─ redlines/{redlineId}
+ *   │    ├─ quantities/{arquivoId}   (quantitativos unificados por arquivo importado)
  *   │    ├─ budgets/{budgetId}
  *   │    ├─ contracts/{contractId}
  *   │    ├─ artRrt/{registroId}
  *   │    └─ timesheets/{entryId}
  *   ├─ cubOverrides/{UF_YYYY-MM}
+ *   ├─ vinculos/{chave}             (item de quantitativo → composição de preço)
  *   ├─ notifications/{notificationId}
  *   └─ auditLogs/{logId}            (somente Cloud Functions gravam; imutável)
  * cubTables/{UF_YYYY-MM}            (global; somente Admin SDK grava)
@@ -29,8 +31,34 @@ export const UFS: UF[] = [
   'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ];
 
-export type Tipologia = 'residencial' | 'comercial' | 'industrial' | 'infraestrutura';
-export type Disciplina = 'arquitetonico' | 'estrutural' | 'hidrossanitario' | 'eletrico' | 'terraplenagem';
+export type Tipologia =
+  | 'residencial' | 'comercial' | 'industrial'
+  | 'condominio_horizontal' | 'condominio_vertical'
+  | 'loteamento' | 'infraestrutura' | 'topografia' | 'saneamento' | 'abastecimento_agua';
+
+export const TIPOLOGIA_LABEL: Record<Tipologia, string> = {
+  residencial: 'Residencial unifamiliar',
+  comercial: 'Comercial',
+  industrial: 'Industrial / galpão',
+  condominio_horizontal: 'Condomínio horizontal',
+  condominio_vertical: 'Condomínio vertical (edifício)',
+  loteamento: 'Loteamento',
+  infraestrutura: 'Infraestrutura viária',
+  topografia: 'Topografia / georreferenciamento',
+  saneamento: 'Saneamento (esgoto e drenagem)',
+  abastecimento_agua: 'Rede de abastecimento de água',
+};
+
+/** Tipologias orçadas por composições unitárias (SINAPI/SICRO/ORSE) em vez do CUB. */
+export const TIPOLOGIAS_INFRA: Tipologia[] = ['loteamento', 'infraestrutura', 'topografia', 'saneamento', 'abastecimento_agua'];
+export type Disciplina =
+  | 'arquitetonico' | 'estrutural' | 'hidrossanitario' | 'eletrico'
+  | 'topografia' | 'terraplenagem' | 'urbanismo' | 'pavimentacao' | 'drenagem' | 'esgotamento' | 'abastecimento_agua';
+
+export const DISCIPLINAS: Disciplina[] = [
+  'arquitetonico', 'estrutural', 'hidrossanitario', 'eletrico',
+  'topografia', 'terraplenagem', 'urbanismo', 'pavimentacao', 'drenagem', 'esgotamento', 'abastecimento_agua',
+];
 export type ProjectStatus = 'briefing' | 'estudo_preliminar' | 'anteprojeto' | 'projeto_executivo' | 'aprovacao' | 'concluido';
 
 export const DISCIPLINA_LABEL: Record<Disciplina, string> = {
@@ -38,7 +66,13 @@ export const DISCIPLINA_LABEL: Record<Disciplina, string> = {
   estrutural: 'Estrutural',
   hidrossanitario: 'Hidrossanitário',
   eletrico: 'Elétrico',
+  topografia: 'Topografia',
   terraplenagem: 'Terraplenagem',
+  urbanismo: 'Urbanismo',
+  pavimentacao: 'Pavimentação',
+  drenagem: 'Drenagem pluvial',
+  esgotamento: 'Esgotamento sanitário',
+  abastecimento_agua: 'Abastecimento de água',
 };
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -120,7 +154,7 @@ export interface CadFile {
   id: string;
   nome: string;
   disciplina: Disciplina;
-  extensao: 'dwg' | 'dxf' | 'csv' | 'xml';
+  extensao: 'dwg' | 'dxf' | 'csv' | 'xml' | 'ifc' | 'inp' | 'txt' | 'landxml';
   revisaoAtual: string;
   totalRevisoes: number;
   atualizadoEm: string;
