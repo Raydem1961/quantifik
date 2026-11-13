@@ -1,0 +1,43 @@
+{
+  "name": "plataforma-aec",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "npx serve out",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "sync:shared": "node scripts/sync-shared.mjs",
+    "cub:import": "node scripts/import-cub.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-aec \"vitest run -c vitest.rules.config.ts\""
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^3.4.4",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "firebase": "^10.12.2",
+    "lucide-react": "^0.400.0",
+    "next": "^14.2.5",
+    "next-themes": "^0.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.4.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
+    "firebase-admin": "^12.7.0",
+    "firebase-tools": "^13.35.1",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.6",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.3"
+  }
+}

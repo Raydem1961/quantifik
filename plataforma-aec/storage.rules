@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function doTenant(tenantId) { return request.auth != null && request.auth.token.tenantId == tenantId; }
+    function equipe(tenantId) {
+      return doTenant(tenantId) && request.auth.token.role in ['socio_diretor', 'coordenador', 'orcamentista', 'projetista'];
+    }
+    function gestor(tenantId) { return doTenant(tenantId) && request.auth.token.role in ['socio_diretor', 'coordenador']; }
+
+    // CAD: tenants/{t}/projects/{p}/cad/{disciplina}/{carimbo}__{arquivo}
+    // Objetos são imutáveis (cada upload é uma nova revisão) — por isso não há `update`.
+    match /tenants/{tenantId}/projects/{projectId}/cad/{disciplina}/{arquivo} {
+      allow read: if doTenant(tenantId);
+      allow create: if equipe(tenantId)
+        && request.resource.metadata.uid == request.auth.uid // autoria não pode ser forjada
+        && request.resource.size < 300 * 1024 * 1024
+        && arquivo.matches('(?i).*\\.(dwg|dxf|csv|xml)$');
+      allow delete: if gestor(tenantId);
+    }
+
+    // PDFs de propostas e contratos.
+    match /tenants/{tenantId}/projects/{projectId}/docs/{arquivo} {
+      allow read: if doTenant(tenantId);
+      allow create: if gestor(tenantId)
+        && request.resource.contentType == 'application/pdf'
+        && request.resource.size < 30 * 1024 * 1024;
+    }
+
+    // Logotipo (white-label).
+    match /tenants/{tenantId}/branding/{arquivo} {
+      allow read: if doTenant(tenantId);
+      allow write: if doTenant(tenantId) && request.auth.token.role == 'socio_diretor'
+        && request.resource.contentType.matches('image/.*') && request.resource.size < 2 * 1024 * 1024;
+    }
+  }
+}

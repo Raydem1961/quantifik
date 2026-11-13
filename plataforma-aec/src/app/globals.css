@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 240 10% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 6%;
+    --primary: 233 60% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 95%;
+    --secondary-foreground: 240 6% 12%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 40%;
+    --accent: 240 5% 93%;
+    --accent-foreground: 240 6% 12%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 70% 29%;
+    --warning: 32 90% 36%;
+    --border: 240 6% 89%;
+    --input: 240 6% 85%;
+    --ring: 233 60% 52%;
+    --radius: 0.5rem;
+    /* Gráficos (paleta categórica validada para o tema claro) */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --chart-grid: #e6e6e3;
+  }
+  .dark {
+    --background: 240 6% 7%;
+    --foreground: 0 0% 95%;
+    --card: 240 5% 10%;
+    --card-foreground: 0 0% 95%;
+    --primary: 234 80% 70%;
+    --primary-foreground: 240 10% 6%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 66%;
+    --accent: 240 4% 18%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 75% 62%;
+    --destructive-foreground: 240 10% 6%;
+    --success: 142 55% 55%;
+    --warning: 36 90% 58%;
+    --border: 240 4% 19%;
+    --input: 240 4% 24%;
+    --ring: 234 80% 70%;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --chart-grid: #2c2c2f;
+  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; font-feature-settings: 'cv11', 'ss01'; }
+  .tabular { font-variant-numeric: tabular-nums; }
+}

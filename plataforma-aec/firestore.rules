@@ -1,0 +1,153 @@
+rules_version = '2';
+// Isolamento multi-tenant: todo acesso é validado contra os custom claims do token
+// (tenantId + role), gravados exclusivamente pela Cloud Function `definirPapel`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() { return request.auth != null; }
+    function doTenant(tenantId) { return autenticado() && request.auth.token.tenantId == tenantId; }
+    function papel() { return request.auth.token.role; }
+    function temPapel(tenantId, papeis) { return doTenant(tenantId) && papel() in papeis; }
+    function equipe(tenantId) { return temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista', 'projetista']); }
+    function gestor(tenantId) { return temPapel(tenantId, ['socio_diretor', 'coordenador']); }
+    function socio(tenantId) { return temPapel(tenantId, ['socio_diretor']); }
+    function clienteDoProjeto(tenantId, projectId) {
+      return temPapel(tenantId, ['cliente'])
+        && request.auth.uid in get(/databases/$(database)/documents/tenants/$(tenantId)/projects/$(projectId)).data.clienteUids;
+    }
+    // Campos que só o servidor pode alterar (status de assinatura, hash etc.).
+    function naoAltera(campos) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(campos); }
+
+    // CUB oficial: leitura para qualquer usuário autenticado; escrita só via Admin SDK (script de importação).
+    match /cubTables/{tabelaId} {
+      allow read: if autenticado();
+      allow write: if false;
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if doTenant(tenantId);
+      allow update: if socio(tenantId);
+      allow create, delete: if false; // provisionamento pelo backend
+
+      match /members/{uid} {
+        allow read: if equipe(tenantId) || (doTenant(tenantId) && request.auth.uid == uid);
+        allow write: if false; // papéis mudam só pela função `definirPapel` (claims + documento em transação)
+      }
+
+      match /clients/{clientId} {
+        allow read: if equipe(tenantId);
+        allow create, update: if gestor(tenantId) || temPapel(tenantId, ['orcamentista']);
+        allow delete: if socio(tenantId);
+      }
+
+      match /cubOverrides/{tabelaId} {
+        allow read: if equipe(tenantId);
+        allow write: if socio(tenantId);
+      }
+
+      match /projects/{projectId} {
+        allow read: if equipe(tenantId)
+          || (temPapel(tenantId, ['cliente']) && request.auth.uid in resource.data.clienteUids);
+        allow create, update: if gestor(tenantId);
+        allow delete: if socio(tenantId);
+
+        match /briefings/{id} {
+          allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
+          allow write: if gestor(tenantId);
+        }
+
+        match /files/{fileId} {
+          allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
+          allow delete: if gestor(tenantId);
+          allow create, update: if false; // criados pela função que processa o upload
+
+          match /versions/{rev} {
+            allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
+            allow write: if false; // revisões são imutáveis
+          }
+        }
+
+        match /redlines/{id} {
+          allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
+          allow create: if (equipe(tenantId) || clienteDoProjeto(tenantId, projectId))
+            && request.resource.data.autorUid == request.auth.uid;
+          allow delete: if gestor(tenantId) || (doTenant(tenantId) && resource.data.autorUid == request.auth.uid);
+          allow update: if false;
+        }
+
+        match /budgets/{id} {
+          allow read: if equipe(tenantId)
+            || (clienteDoProjeto(tenantId, projectId) && resource.data.status in ['enviado', 'aprovado']);
+          allow create: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
+            && request.resource.data.status == 'rascunho';
+          // Orçamentista edita; aprovação interna só do sócio; o cliente só pode aprovar um orçamento enviado.
+          allow update: if (temPapel(tenantId, ['coordenador', 'orcamentista'])
+              && request.resource.data.status in ['rascunho', 'enviado'] && resource.data.status != 'aprovado')
+            || socio(tenantId)
+            || (clienteDoProjeto(tenantId, projectId) && resource.data.status == 'enviado'
+              && request.resource.data.status == 'aprovado'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'aprovadoPor', 'aprovadoEm']));
+          allow delete: if socio(tenantId);
+        }
+
+        match /contracts/{id} {
+          allow read: if gestor(tenantId) || temPapel(tenantId, ['orcamentista'])
+            || (clienteDoProjeto(tenantId, projectId) && resource.data.status in ['enviado_assinatura', 'assinado']);
+          allow create: if gestor(tenantId) && request.resource.data.status == 'rascunho';
+          // Só rascunhos são editáveis; status, hash e assinatura são do servidor.
+          allow update: if gestor(tenantId) && resource.data.status == 'rascunho'
+            && naoAltera(['status', 'sha256', 'assinatura']);
+          allow delete: if socio(tenantId) && resource.data.status == 'rascunho';
+        }
+
+        match /artRrt/{id} {
+          allow read: if equipe(tenantId);
+          // `tenantId` no documento é exigido pelas consultas collectionGroup (regra no fim do arquivo).
+          allow create, update: if gestor(tenantId) && request.resource.data.tenantId == tenantId;
+          allow delete: if gestor(tenantId);
+        }
+
+        match /timesheets/{id} {
+          // Cada um vê e lança as próprias horas; gestores veem tudo (margem do projeto).
+          allow read: if gestor(tenantId) || (equipe(tenantId) && resource.data.uid == request.auth.uid);
+          allow create: if equipe(tenantId) && request.resource.data.uid == request.auth.uid
+            && request.resource.data.tenantId == tenantId
+            && request.resource.data.minutos is number && request.resource.data.minutos > 0
+            && request.resource.data.minutos <= 1440;
+          allow update: if (gestor(tenantId) || (equipe(tenantId) && resource.data.uid == request.auth.uid))
+            && naoAltera(['uid', 'tenantId']);
+          allow delete: if gestor(tenantId) || (equipe(tenantId) && resource.data.uid == request.auth.uid);
+        }
+      }
+
+      match /notifications/{id} {
+        allow read: if equipe(tenantId)
+          || (temPapel(tenantId, ['cliente']) && request.auth.uid in resource.data.destinatarios);
+        // O usuário só pode marcar a notificação como lida para si mesmo.
+        allow update: if doTenant(tenantId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lidaPor'])
+          && request.resource.data.lidaPor.toSet().difference(resource.data.lidaPor.toSet()) == [request.auth.uid].toSet();
+        allow create, delete: if false;
+      }
+
+      // Trilha de auditoria: escrita somente pelo Admin SDK; ninguém edita nem apaga.
+      match /auditLogs/{id} {
+        allow read: if socio(tenantId);
+        allow write: if false;
+      }
+    }
+
+    // Índice interno documento-de-assinatura → contrato (somente backend).
+    match /signatureRequests/{id} { allow read, write: if false; }
+
+    // Consultas collectionGroup (ex.: ART/RRT de todos os projetos do tenant).
+    match /{path=**}/artRrt/{id} {
+      allow read: if autenticado() && resource.data.tenantId == request.auth.token.tenantId
+        && papel() in ['socio_diretor', 'coordenador', 'orcamentista', 'projetista'];
+    }
+    match /{path=**}/timesheets/{id} {
+      allow read: if autenticado() && resource.data.tenantId == request.auth.token.tenantId
+        && papel() in ['socio_diretor', 'coordenador'];
+    }
+  }
+}

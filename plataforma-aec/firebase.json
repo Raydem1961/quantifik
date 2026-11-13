@@ -1,0 +1,33 @@
+{
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "storage": { "rules": "storage.rules" },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs20",
+      "ignore": ["node_modules", ".git", "*.log"],
+      "predeploy": ["node scripts/sync-shared.mjs", "npm --prefix functions run build"]
+    }
+  ],
+  "hosting": {
+    "public": "out",
+    "cleanUrls": true,
+    "trailingSlash": true,
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{ "source": "/api/assinatura/webhook", "function": { "functionId": "webhookAssinatura", "region": "southamerica-east1" } }],
+    "headers": [
+      { "source": "/_next/static/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+      { "source": "**", "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+      ] }
+    ]
+  },
+  "emulators": {
+    "auth": { "port": 9099 }, "firestore": { "port": 8080 }, "storage": { "port": 9199 },
+    "functions": { "port": 5001 }, "hosting": { "port": 5000 }, "ui": { "enabled": true }
+  }
+}

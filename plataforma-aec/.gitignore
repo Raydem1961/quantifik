@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+.env.local
+.env.*.local
+.firebase/
+.firebaserc
+*.log
+functions/lib/
+functions/src/shared/
+serviceAccount*.json
+backups/
+tsconfig.tsbuildinfo
+next-env.d.ts
