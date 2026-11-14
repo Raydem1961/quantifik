@@ -203,7 +203,59 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     const ct = await ate(async () => { const s = await adb.collection(`tenants/${T}/projects/lot-1/contracts`).get(); return s.empty ? null : s.docs[0].data(); });
     checar('contrato no Firestore: enviado, com o hash do PDF exibido', ct?.status === 'enviado_assinatura' && ct?.sha256 === sha2 && sha2.length === 64 && typeof sha === 'string', JSON.stringify({ s: ct?.status }));
 
-    console.log('\n8. Papéis');
+    console.log('\n8. Serviços & Cotações (Quantifik) no Firestore');
+    await p.goto(`${APP}/composicoes/`, { waitUntil: 'load' });
+    await p.getByText(/composições$/).first().waitFor({ timeout: 60000 });
+    await p.getByLabel('Buscar por código ou descrição').fill('103368');
+    await p.getByRole('list', { name: 'Serviços encontrados' }).getByRole('button').first().click();
+    await p.getByLabel('Comprimento (m)').fill('10');
+    await p.getByLabel('Altura (m)').fill('3');
+    await p.getByRole('button', { name: /Adicionar à cotação/ }).click();
+    const cot = await ate(async () => { const s = await adb.collection(`tenants/${T}/cotacoes`).get(); return s.empty ? null : s.docs[0].data(); });
+    checar('cotação gravada no escritório com número e serviço', cot?.numero === `001/${new Date().getFullYear()}` && cot?.itens?.[0]?.cod === '103368' && cot?.itens?.[0]?.qtd === 30 && cot?.tenantId === T, JSON.stringify(cot));
+    await p.getByRole('tab', { name: 'Parâmetros' }).click();
+    await p.getByLabel('BDI (%)').fill('30');
+    const cfg = await ate(async () => { const d = (await adb.doc(`tenants/${T}/config/composicoes`).get()).data(); return d?.bdi === 30 ? d : null; });
+    checar('parâmetros de preço salvos para toda a equipe', cfg?.bdi === 30 && cfg?.pisos?.servente > 0 && cfg?.tenantId === T);
+
+    console.log('\n9. Gestão de obras (ObraTop) no Firestore');
+    await p.goto(`${APP}/gestao/`, { waitUntil: 'load' });
+    await p.getByRole('button', { name: 'Novo' }).click();
+    await p.getByLabel('Nome da obra *').fill('Obra E2E');
+    await p.getByLabel('Cliente *').fill('Cliente E2E');
+    await p.getByLabel('Início *').fill('2026-01-05');
+    await p.getByLabel('Término previsto *').fill('2026-06-30');
+    await p.getByLabel('Valor contratado').fill('500.000,00');
+    await p.getByRole('button', { name: 'Salvar' }).click();
+    const obra = await ate(async () => { const s = await adb.collection(`tenants/${T}/works`).get(); return s.empty ? null : s.docs[0]; });
+    checar('obra criada com os campos do ObraTop', obra?.data().name === 'Obra E2E' && obra?.data().value === 500000 && obra?.data().deleted === false && obra?.data().tenantId === T, JSON.stringify(obra?.data()));
+    // cronograma chega por outro caminho (ex.: migração): aparece sem recarregar
+    const act = (id, wbs, name, start, end, progress, pred) => adb.doc(`tenants/${T}/activities/${id}`).set({ tenantId: T, workId: obra.id, wbs, name, start, end, progress, predecessors: pred, progressMode: 'Percentual', status: 'Em andamento', deleted: false });
+    await act('a1', '1.1', 'Fundações', '2026-01-05', '2026-02-13', 100, '');
+    await act('a2', '1.2', 'Estrutura', '2026-02-16', '2026-04-30', 40, '1.1');
+    await act('a3', '1.3', 'Acabamentos', '2026-05-01', '2026-06-30', 0, '1.2'); // sem folga: as três ficam no caminho crítico
+    await p.getByRole('combobox', { name: /^Módulo/ }).selectOption('activities');
+    await p.getByRole('tab', { name: 'Gantt' }).click();
+    checar('cronograma em tempo real no Gantt, com caminho crítico', await p.getByText(/caminho crítico \(3\)/).waitFor({ timeout: 15000 }).then(() => true, () => false));
+    p.once('dialog', (d) => d.accept('Linha de base inicial'));
+    await p.getByRole('button', { name: 'Congelar linha de base' }).click();
+    const base = await ate(async () => (await obra.ref.get()).data().baseline);
+    checar('linha de base congelada no formato do ObraTop', base?.revision === 1 && base?.items?.a2?.s === '2026-02-16' && base?.items?.a2?.e === '2026-04-30' && base?.items?.a2?.w > 0 && base?.byEmail === 'socio@atelier.test', JSON.stringify(base?.items?.a2));
+    await adb.doc(`tenants/${T}/activities/a2`).update({ end: '2026-05-15' });
+    await p.getByRole('button', { name: /Replanejar \(base rev\. 1\)/ }).waitFor({ timeout: 10000 });
+    p.once('dialog', (d) => d.accept('Atraso na estrutura'));
+    await p.getByRole('button', { name: /Replanejar/ }).click();
+    const obra2 = await ate(async () => { const d = (await obra.ref.get()).data(); return d.baseline?.revision === 2 ? d : null; });
+    checar('replanejamento guarda a base anterior no histórico', obra2?.baselineHistory?.[0]?.revision === 1 && obra2?.baseline?.items?.a2?.e === '2026-05-15');
+    const [rel] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.getByRole('button', { name: /Relatório em PDF de Obra E2E/ }).click()]);
+    checar('relatório da obra em PDF é gerado', /^relatorio-Obra_E2E-.*\.pdf$/.test(rel.suggestedFilename()), rel.suggestedFilename());
+    // exclusão lógica
+    await p.getByRole('tab', { name: 'Tabela' }).click();
+    p.once('dialog', (d) => d.accept());
+    await p.getByRole('button', { name: /^Excluir 1\.3 Acabamentos/ }).click();
+    checar('exclusão é lógica: o registro continua no banco com deleted', await ate(async () => { const d = (await adb.doc(`tenants/${T}/activities/a3`).get()).data(); return d?.deleted === true && d?.name === 'Acabamentos'; }));
+
+    console.log('\n10. Papéis');
     p = await novaPagina();
     await entrar(p, 'projetista@atelier.test');
     await p.waitForURL('**/dashboard/');
@@ -212,6 +264,12 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     checar('projetista: não vê a tabela de margem', (await p.getByRole('columnheader', { name: 'Margem real' }).count()) === 0);
     await p.goto(`${APP}/quantitativos/`, { waitUntil: 'load' });
     checar('projetista: sem botão de importar no orçamento analítico', (await p.getByText('Importar arquivos').count()) === 0);
+    await p.goto(`${APP}/gestao/?m=suppliers`, { waitUntil: 'load' });
+    await p.getByRole('heading', { name: 'Fornecedores' }).waitFor({ timeout: 15000 });
+    checar('projetista: fornecedores só para leitura (como no ObraTop)', (await p.getByRole('button', { name: 'Novo' }).count()) === 0);
+    await p.goto(`${APP}/gestao/?m=dailyLogs`, { waitUntil: 'load' });
+    await p.getByRole('heading', { name: 'Diário de Obra' }).waitFor({ timeout: 15000 });
+    checar('projetista: pode lançar diário de obra', (await p.getByRole('button', { name: 'Novo' }).count()) === 1);
     p = await novaPagina();
     await entrar(p, 'cliente@atelier.test');
     await p.waitForURL('**/dashboard/');

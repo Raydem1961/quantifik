@@ -21,6 +21,21 @@ npm run dev            # http://localhost:3000
 .\scripts\setup-deploy.ps1 -ProjectId <id-do-projeto-firebase>
 ```
 
+### Primeira empresa
+
+Pelas regras de segurança, só o backend cria empresas e atribui papéis. Depois do deploy:
+
+```bash
+# 1. a pessoa entra uma vez no aplicativo (cria a conta) e vê "Conta ainda sem empresa vinculada"
+# 2. um administrador do projeto Firebase roda:
+node scripts/criar-empresa.mjs --projeto <id-firebase> --tenant minha-empresa --nome "Minha Empresa" \
+  --razao "Minha Empresa Ltda." --cnpj 00.000.000/0001-00 --uf BA \
+  --rt "Eng. Fulano" --conselho CREA --registro "CREA-BA 12345" --socio email@empresa.com
+# 3. a pessoa sai e entra de novo: já é Sócio-Diretor e atribui os demais papéis pelo aplicativo
+```
+
+Rodar de novo com outro `--socio` acrescenta um sócio sem alterar o cadastro da empresa.
+
 Sem `.env.local` o app sobe em **modo demonstração**; com as variáveis `NEXT_PUBLIC_FIREBASE_*`
 (geradas pelo `setup-deploy.ps1`) ele usa Auth/Firestore/Storage reais.
 
@@ -30,6 +45,8 @@ Sem `.env.local` o app sobe em **modo demonstração**; com as variáveis `NEXT_
 | `npm run test:rules` | Testes das regras do Firestore no emulador (requer Java) |
 | `npm run typecheck` / `npm run build` | Checagem de tipos / build estático em `out/` |
 | `scripts/setup-deploy.ps1` | Pré-requisitos, dependências, `.env.local`, testes, build e deploy |
+| `scripts/criar-empresa.mjs` | Cria a empresa (tenant) e o primeiro Sócio-Diretor — primeiro passo de uma instalação |
+| `scripts/migrar-obratop.mjs` | Copia uma organização do ObraTop para a plataforma (simulação por padrão) |
 | `scripts/import-cub.ps1` | Importa o CUB mensal (CSV) para `cubTables` — `-Simular` só valida |
 | `scripts/sync-cad.ps1` | Monitora a pasta local de CAD e envia cada arquivo salvo |
 | `scripts/backup.ps1` | Exporta o Firestore e sincroniza o Storage para um bucket de backup |
@@ -201,10 +218,15 @@ qualidade, segurança, pessoal e documentos.
   preservando ids e referências. Sem `--gravar` é só simulação; a origem nunca é alterada; nada
   é sobrescrito sem `--sobrescrever`; pode ser repetida. `npm run test:migracao` testa no emulador.
 
+- **Linha de base.** Congelar e replanejar gravam `baseline` e `baselineHistory` na obra, no
+  mesmo formato do ObraTop; o avanço planejado e o Gantt passam a comparar com ela.
+- **Relatório da obra em PDF:** desempenho, cronograma com folgas e caminho crítico, medições,
+  contratos e fluxo de caixa projetado.
+
 Ainda não trazido do ObraTop: convites e membros (a plataforma usa papéis próprios), restrição
-de usuário por obra, pontos de restauração, linha de base do cronograma, geração de cronograma a
+de usuário por obra, pontos de restauração, geração de cronograma a
 partir do orçamento, orçamento com composições próprias (`orcamento-ui`), análise econômica
-(`economics-ui`), modelos de obra, envio de arquivo em Documentos, relatórios em PDF, manual
+(`economics-ui`), modelos de obra, envio de arquivo em Documentos, os demais relatórios em PDF, manual
 e a interface própria para celular. "Obras" (execução) e "projetos" (escritório de projeto) são
 cadastros separados, ainda sem vínculo entre si.
 

@@ -14,14 +14,15 @@ const cmpWbs = (a: string, b: string) => a.localeCompare(b, undefined, { numeric
  * Gantt de uma obra: barra = período planejado, preenchimento = progresso, contorno vermelho =
  * caminho crítico (CPM do ObraTop, em dias úteis, a partir das predecessoras por código EAP).
  */
-export function GanttObra({ atividades, onAbrir }: { atividades: AtividadeGantt[]; onAbrir?: (id: string) => void }) {
+export function GanttObra({ atividades, linhaBase, onAbrir }: { atividades: AtividadeGantt[]; linhaBase?: Record<string, { s: string; e: string }>; onAbrir?: (id: string) => void }) {
   const [foco, setFoco] = React.useState<string | null>(null);
   const validas = React.useMemo(() => atividades.filter((a) => a.start && a.end).sort((a, b) => cmpWbs(a.wbs ?? '', b.wbs ?? '') || a.start.localeCompare(b.start)), [atividades]);
   const critico = React.useMemo(() => cpm(validas.map((a) => ({ id: a.id, wbs: String(a.wbs ?? ''), start: a.start, end: a.end, pred: a.predecessors ?? '' }))), [validas]);
   if (validas.length === 0) return <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma atividade com datas nesta obra.</p>;
 
-  const inicio = Math.min(...validas.map((a) => t(a.start)));
-  const fim = Math.max(...validas.map((a) => t(a.end))) + DIA;
+  const bases = linhaBase ? validas.map((a) => linhaBase[a.id]).filter((b): b is { s: string; e: string } => !!b?.s && !!b?.e) : [];
+  const inicio = Math.min(...validas.map((a) => t(a.start)), ...bases.map((b) => t(b.s)));
+  const fim = Math.max(...validas.map((a) => t(a.end)), ...bases.map((b) => t(b.e))) + DIA;
   const span = Math.max(fim - inicio, DIA);
   const x = (ms: number) => ((ms - inicio) / span) * 100;
   const meses: { rotulo: string; pos: number }[] = [];
@@ -41,6 +42,7 @@ export function GanttObra({ atividades, onAbrir }: { atividades: AtividadeGantt[
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: 'color-mix(in srgb, var(--series-1) 30%, transparent)' }} />planejado</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: 'var(--series-1)' }} />executado</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm border-2 border-destructive" />caminho crítico ({nCriticas})</span>
+        {bases.length > 0 && <span className="flex items-center gap-1.5"><span className="h-1 w-5 rounded-sm bg-muted-foreground/60" />linha de base</span>}
         <span>{validas.length} atividades · {dataBr(new Date(inicio).toISOString())} a {dataBr(new Date(fim - DIA).toISOString())}</span>
       </div>
       <div className="grid grid-cols-[minmax(150px,280px)_1fr] gap-x-3 text-xs">
@@ -68,9 +70,10 @@ export function GanttObra({ atividades, onAbrir }: { atividades: AtividadeGantt[
                   style={{ marginLeft: `${ini}%`, width: `${larg}%`, background: 'color-mix(in srgb, var(--series-1) 30%, transparent)' }}>
                   <div className="h-full" style={{ width: `${pct}%`, background: 'var(--series-1)' }} />
                 </div>
+                {linhaBase?.[a.id] && <div aria-hidden className="mt-0.5 h-1 rounded-sm bg-muted-foreground/60" style={{ marginLeft: `${x(t(linhaBase[a.id]!.s))}%`, width: `${Math.max(x(t(linhaBase[a.id]!.e) + DIA) - x(t(linhaBase[a.id]!.s)), 0.6)}%` }} />}
                 {foco === a.id && (
                   <div role="tooltip" className="pointer-events-none absolute -top-8 z-10 whitespace-nowrap rounded-md border bg-card px-2 py-1 shadow-md" style={{ left: `min(${ini}%, calc(100% - 300px))` }}>
-                    {dataBr(a.start)} → {dataBr(a.end)} · {pct}%{c ? ` · folga ${Math.max(0, c.slack)} d` : ''}{c?.critical ? ' · crítica' : ''}{atrasada && <span className="text-destructive"> · atrasada</span>}
+                    {dataBr(a.start)} → {dataBr(a.end)} · {pct}%{c ? ` · folga ${Math.max(0, c.slack)} d` : ''}{c?.critical ? ' · crítica' : ''}{linhaBase?.[a.id] && linhaBase[a.id]!.e !== a.end ? ` · base terminava em ${dataBr(linhaBase[a.id]!.e)}` : ''}{atrasada && <span className="text-destructive"> · atrasada</span>}
                   </div>
                 )}
               </div>

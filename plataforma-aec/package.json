@@ -16,7 +16,9 @@
     "test:e2e:ui": "node tests/e2e/ui.e2e.cjs",
     "emuladores": "firebase emulators:start --project demo-aec --only auth,firestore,storage,functions",
     "test:obratop": "node --test tests/obratop-original/calc.test.mjs tests/obratop-original/msproject.test.mjs tests/obratop-original/orcamento.test.mjs && node tests/obratop-original/economics.test.mjs",
-    "test:migracao": "firebase emulators:exec --only firestore --project demo-aec \"node tests/e2e/migracao.e2e.mjs\""
+    "test:migracao": "firebase emulators:exec --only firestore --project demo-aec \"node tests/e2e/migracao.e2e.mjs\"",
+    "test:empresa": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/empresa.e2e.mjs\"",
+    "empresa:criar": "node scripts/criar-empresa.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",

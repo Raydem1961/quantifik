@@ -6,7 +6,7 @@
  * caixa, caminho crítico, MS Project) são os módulos originais do ObraTop, sem alteração.
  */
 import * as React from 'react';
-import { Download, FileUp, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Download, FileText, FileUp, Flag, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { GanttObra, type AtividadeGantt } from '@/components/gestao/gantt-obra';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { atualizarDoc, definirDoc, useColecao } from '@/hooks/use-colecao';
 import { brl, dataBr, num, pct } from '@/lib/format';
 import { COLECAO_DA_REFERENCIA, ESQUEMAS, GRUPOS_MODULOS, MODULOS, rotuloRegistro, type CampoEsquema, type EsquemaModulo, type IdModulo } from '@/lib/obratop/esquemas';
-import { budgetSale, cashProjection, contractBalance, incurredCost, measurementNet, schedulePerformance } from '@/lib/obratop/vendor/calc.mjs';
+import { activityWeights, budgetSale, cashProjection, contractBalance, incurredCost, measurementNet, schedulePerformance } from '@/lib/obratop/vendor/calc.mjs';
 import { cpm, mspdiExport, parseMspdi, toActivities } from '@/lib/obratop/vendor/msproject.mjs';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +35,7 @@ function podeGravar(role: string | undefined, esquema: EsquemaModulo): boolean {
 }
 
 export default function Gestao() {
-  const { tenantId, usuario, role } = useAuth();
+  const { tenantId, tenant, usuario, role } = useAuth();
   const [modulo, setModuloEstado] = React.useState<IdModulo>('works');
   // Exportação estática: o módulo vai na URL (?m=finance) sem depender do roteador.
   React.useEffect(() => {
@@ -150,6 +150,60 @@ export default function Gestao() {
     setTimeout(() => URL.revokeObjectURL(link.href), 30000);
   };
 
+  // ── Linha de base (mesma estrutura do ObraTop: works/{id}.baseline + baselineHistory) ──
+  type LinhaBase = { revision: number; date: string; reason: string; byEmail: string; items: Record<string, { s: string; e: string; w: number }> };
+  const linhaBase = (obraSel?.baseline as LinhaBase | undefined) ?? null;
+  const congelarLinhaBase = async () => {
+    if (!tenantId || !obraSel) return;
+    const acts = atividadesDaObra.filter((a) => a.start && a.end);
+    if (!acts.length) { setMsg({ tipo: 'erro', texto: 'A obra não tem atividades com datas para congelar.' }); return; }
+    const motivo = window.prompt(linhaBase ? 'Motivo do replanejamento (a linha de base atual vai para o histórico):' : 'Motivo da linha de base:', linhaBase ? 'Replanejamento' : 'Linha de base inicial');
+    if (motivo === null) return;
+    const { weights } = activityWeights(acts, vivos(orcamentos));
+    const items: LinhaBase['items'] = {};
+    for (const a of acts) items[a.id] = { s: String(a.start), e: String(a.end), w: Math.round((weights.get(a.id) || 1) * 100) / 100 };
+    const historico = [...((obraSel.baselineHistory as unknown[] | undefined) ?? [])];
+    if (linhaBase) historico.push({ revision: linhaBase.revision, date: linhaBase.date, reason: linhaBase.reason || '', by: linhaBase.byEmail || '', count: Object.keys(linhaBase.items || {}).length });
+    try {
+      await atualizarDoc(tenantId, `works/${obraSel.id}`, {
+        baseline: { revision: (linhaBase?.revision || 0) + 1, date: hoje(), reason: motivo.slice(0, 200), byEmail: usuario?.email ?? '', items },
+        baselineHistory: historico.slice(-15), updatedAt: new Date().toISOString(), updatedBy: usuario?.uid ?? '',
+      });
+      setMsg({ tipo: 'ok', texto: `Linha de base rev. ${(linhaBase?.revision || 0) + 1} congelada com ${acts.length} atividades. O avanço planejado passa a ser medido contra ela.` });
+    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível congelar a linha de base.' }); }
+  };
+
+  // ── Relatório da obra em PDF ─────────────────────────────────────────────
+  const gerarRelatorio = async (obra: Reg) => {
+    if (!tenant) return;
+    try {
+      const dia = hoje();
+      const acts = vivos(atividades).filter((a) => a.workId === obra.id && a.start && a.end).sort((a, b) => String(a.wbs ?? '').localeCompare(String(b.wbs ?? ''), undefined, { numeric: true }));
+      const bud = vivos(orcamentos).filter((b) => b.workId === obra.id);
+      const fin = vivos(financeiro).filter((f) => f.workId === obra.id);
+      const med = vivos(medicoes).filter((m) => m.workId === obra.id).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      const orcado = bud.reduce((t, b) => t + budgetSale(b), 0) || Number(obra.value) || 0;
+      const incorrido = incurredCost(fin, dia);
+      const critico = cpm(acts.map((a) => ({ id: a.id, wbs: String(a.wbs ?? ''), start: String(a.start), end: String(a.end), pred: String(a.predecessors ?? '') })));
+      const [{ pdf }, { RelatorioObraPdf }] = await Promise.all([import('@react-pdf/renderer'), import('@/components/gestao/relatorio-obra-pdf')]);
+      const blob = await pdf(<RelatorioObraPdf r={{
+        empresa: { nome: tenant.nomeFantasia, responsavel: tenant.responsavelTecnico.nome, registro: tenant.responsavelTecnico.registro, corPrimaria: tenant.branding.corPrimaria },
+        obra, emitidoEm: dia, orcado, incorrido,
+        desempenho: schedulePerformance({ acts, budgets: bud, works: [obra], budget: orcado, incurred: incorrido, day: dia }),
+        atividades: acts.map((a) => ({ ...a, critica: !!critico.get(a.id)?.critical, folga: critico.get(a.id)?.slack ?? null })),
+        linhaBase: (obra.baseline as LinhaBase | undefined) ?? null,
+        medicoes: med.map((m) => { const n = measurementNet(m); return { ...m, liquido: n.net, retencao: n.retention }; }),
+        contratos: vivos(contratos).filter((c) => c.workId === obra.id).map((c) => { const b = contractBalance(c, medicoes); return { ...c, atual: b.current, medido: b.measured, saldo: b.balance }; }),
+        caixa: cashProjection(fin, dia, 6),
+      }} />).toBlob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `relatorio-${String(obra.name ?? 'obra').replace(/[^\w\-]+/g, '_')}-${dia}.pdf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 30000);
+    } catch (e) { setMsg({ tipo: 'erro', texto: `Não foi possível gerar o relatório: ${e instanceof Error ? e.message : 'erro desconhecido'}` }); }
+  };
+
   // ── Indicadores por módulo ───────────────────────────────────────────────
   const indicadores = React.useMemo((): [string, string, string?][] => {
     const dia = hoje();
@@ -208,7 +262,9 @@ export default function Gestao() {
         <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
           {desempenho.map(({ obra, p, n }) => (
             <Card key={obra.id}><CardContent className="p-4">
-              <div className="flex items-baseline justify-between gap-2"><p className="truncate text-sm font-semibold">{String(obra.name)}</p><span className="text-[11px] text-muted-foreground">{n} atividades</span></div>
+              <div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-semibold">{String(obra.name)}</p>
+                <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">{n} atividades{(obra.baseline as { revision?: number } | undefined)?.revision ? ` · base rev. ${(obra.baseline as { revision: number }).revision}` : ''}
+                  <Button size="sm" variant="outline" aria-label={`Relatório em PDF de ${String(obra.name)}`} onClick={() => void gerarRelatorio(obra)}><FileText className="h-3.5 w-3.5" />Relatório PDF</Button></span></div>
               {n === 0 ? <p className="mt-2 text-xs text-muted-foreground">Sem cronograma: cadastre atividades ou importe do MS Project.</p> : (
                 <>
                   <div className="mt-2 space-y-1.5">
@@ -251,12 +307,13 @@ export default function Gestao() {
             {modulo === 'activities' && obraSel && <Button variant="outline" onClick={exportarProject}><Download className="h-4 w-4" />MS Project</Button>}
             {modulo === 'activities' && obraSel && gravavel && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-4 w-4" />Importar XML
               <input type="file" accept=".xml" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importarProject(a); }} /></label>}
+            {modulo === 'activities' && obraSel && (role === 'socio_diretor' || role === 'coordenador') && <Button variant="outline" onClick={() => void congelarLinhaBase()}><Flag className="h-4 w-4" />{linhaBase ? `Replanejar (base rev. ${linhaBase.revision})` : 'Congelar linha de base'}</Button>}
             {gravavel && <Button onClick={() => setEditando('novo')}><Plus className="h-4 w-4" />Novo</Button>}
           </div>
         </CardHeader>
         <CardContent>
           {carregando ? <p className="py-10 text-center text-sm text-muted-foreground">Carregando…</p>
-            : modulo === 'activities' && visao === 'gantt' ? <GanttObra atividades={atividadesDaObra as unknown as AtividadeGantt[]} onAbrir={gravavel ? (id) => setEditando(atividadesDaObra.find((a) => a.id === id) ?? null) : undefined} />
+            : modulo === 'activities' && visao === 'gantt' ? <GanttObra atividades={atividadesDaObra as unknown as AtividadeGantt[]} linhaBase={linhaBase?.items} onAbrir={gravavel ? (id) => setEditando(atividadesDaObra.find((a) => a.id === id) ?? null) : undefined} />
             : registros.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">Nenhum registro{busca ? ' para esta busca' : ''}. {gravavel && !busca ? 'Use "Novo" para começar.' : ''}</p>
             : (
               <div className="overflow-x-auto">

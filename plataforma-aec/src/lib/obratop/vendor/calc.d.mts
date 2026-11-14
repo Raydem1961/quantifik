@@ -9,3 +9,4 @@ export function incurredCost(fin: Reg[], dayISO: string): number;
 export function schedulePerformance(o: { acts: Reg[]; budgets?: Reg[]; works?: Reg[]; budget?: number; incurred?: number; day: string }): { planned: number; actual: number; variance: number; spi: number; cpi: number; ev: number; eac: number; etc: number; vac: number };
 export function cashProjection(fin: Reg[], dayISO: string, months?: number): { opening: number; rows: { key: string; label: string; inflow: number; outflow: number; net: number; balance: number }[]; firstNegative: { key: string; label: string; balance: number } | null; minBalance: number };
 export function suggestBudgetLinks(acts: Reg[], budgets: Reg[]): { activityId: string; budgetId: string }[];
+export function activityWeights(valid: Reg[], budgets: Reg[]): { weights: Map<string, number>; modes: Map<string, string>; linkedCount: Map<string, { linked: number; total: number }> };
