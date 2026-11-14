@@ -138,3 +138,40 @@ C-001;Concreto fck 25 MPa;m³;42,5
 ;Porta de madeira 80x210;un;12
 ;Subtotal;;
 `;
+
+/** Reproduz peculiaridades reais do exportador IFC do Revit (ver testes). */
+export const IFC_REVIT_QUIRKS = `ISO-10303-21;
+HEADER;
+FILE_SCHEMA(('IFC2X3'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);
+#2=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#3=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);
+#4=IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.);
+#5=IFCUNITASSIGNMENT((#1,#3,#4));
+#10=IFCWALLSTANDARDCASE('w1',$,'Parede',$,'Basic Wall:Externa 54cm',$,$,'1');
+#11=IFCQUANTITYLENGTH('Height',$,$,2534.6);
+#12=IFCQUANTITYLENGTH('Length',$,$,22600.);
+#13=IFCQUANTITYVOLUME('NetVolume',$,$,30932711431.217);
+#14=IFCQUANTITYAREA('NetSideArea',$,$,57282798.9466982);
+#15=IFCQUANTITYAREA('NetSideArea',$,$,48.0210989466982);
+#16=IFCQUANTITYVOLUME('NetVolume',$,$,25.1098377156085);
+#17=IFCELEMENTQUANTITY('q1',$,'BaseQuantities',$,$,(#11,#12,#13,#14,#15,#16));
+#18=IFCRELDEFINESBYPROPERTIES('r1',$,$,$,(#10),#17);
+#20=IFCSLAB('s1',$,'Telhado',$,'Basic Roof:Telha',$,$,'2',.ROOF.);
+#21=IFCQUANTITYAREA('GrossArea',$,$,12.19);
+#22=IFCQUANTITYAREA('NetArea',$,$,527.61);
+#23=IFCELEMENTQUANTITY('q2',$,'BaseQuantities',$,$,(#21,#22));
+#24=IFCRELDEFINESBYPROPERTIES('r2',$,$,$,(#20),#23);
+#30=IFCOPENINGELEMENT('o1',$,'Opening',$,'Opening',$,$,'3');
+#31=IFCQUANTITYAREA('Area',$,$,2.1);
+#32=IFCELEMENTQUANTITY('q3',$,'BaseQuantities',$,$,(#31));
+#33=IFCRELDEFINESBYPROPERTIES('r3',$,$,$,(#30),#32);
+#40=IFCWALLSTANDARDCASE('w2',$,'Parede 2',$,'Basic Wall:Interna',$,$,'4');
+#41=IFCQUANTITYAREA('NetSideArea',$,$,57282798.9);
+#42=IFCELEMENTQUANTITY('q4',$,'BaseQuantities',$,$,(#41));
+#43=IFCRELDEFINESBYPROPERTIES('r4',$,$,$,(#40),#42);
+ENDSEC;
+END-ISO-10303-21;
+`;

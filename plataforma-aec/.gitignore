@@ -12,3 +12,6 @@ serviceAccount*.json
 backups/
 tsconfig.tsbuildinfo
 next-env.d.ts
+functions/.secret.local
+functions/.env.local
+*-debug.log

@@ -30,7 +30,9 @@ function Kpi({ icon: Icon, rotulo, valor, detalhe, alerta }: { icon: React.Eleme
 export default function Dashboard() {
   const { tenantId, tenant, usuario, role } = useAuth();
   const { dados: projetos, carregando, erro } = useColecao<Project>('projects');
-  const { dados: arts } = useColecao<ArtRrt>('artRrt', { grupo: true });
+  const cliente = role === 'cliente';
+  // ART/RRT é informação interna do escritório: o cliente não consulta.
+  const { dados: arts } = useColecao<ArtRrt>(cliente ? null : 'artRrt', { grupo: true });
   const gestor = role === 'socio_diretor' || role === 'coordenador';
   // Só gestores podem ler as horas de toda a equipe (regra de segurança) — os demais não consultam.
   const { dados: horas } = useColecao<TimesheetEntry>(gestor ? 'timesheets' : null, { grupo: true });
@@ -48,9 +50,9 @@ export default function Dashboard() {
   if (!tenantId || !usuario) return null;
   return (
     <>
-      <PageHeader titulo="Dashboard" descricao="Carteira de projetos, prazos, responsabilidade técnica e rentabilidade em tempo real.">
-        <Link href="/briefing/" className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent">Novo briefing</Link>
-        <Link href="/orcamento/" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Novo orçamento</Link>
+      <PageHeader titulo={cliente ? 'Meus projetos' : 'Dashboard'} descricao={cliente ? 'Acompanhe o andamento dos seus projetos em tempo real.' : 'Carteira de projetos, prazos, responsabilidade técnica e rentabilidade em tempo real.'}>
+        {!cliente && <><Link href="/briefing/" className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent">Novo briefing</Link>
+        <Link href="/orcamento/" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Novo orçamento</Link></>}
       </PageHeader>
       {erro && <p role="alert" className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">Não foi possível carregar os projetos: {erro}</p>}
 
@@ -76,7 +78,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
+      {!cliente && <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardHeader><CardTitle>Horas técnicas e margem real</CardTitle><CardDescription>Valor cobrado × horas gastas ao custo de {brlCompacto(tenant?.custoHoraTecnica ?? 0)}/h.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
@@ -88,7 +90,7 @@ export default function Dashboard() {
           <CardHeader><CardTitle>ART / RRT</CardTitle><CardDescription>Emissão, pagamento e vinculação por etapa.</CardDescription></CardHeader>
           <CardContent><ArtPanel registros={arts} /></CardContent>
         </Card>
-      </div>
+      </div>}
     </>
   );
 }

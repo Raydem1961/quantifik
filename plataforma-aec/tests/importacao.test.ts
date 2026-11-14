@@ -5,7 +5,7 @@ import { buscarComposicoes, calcularOrcamentoAnalitico, chaveVinculo, indexarBas
 import { maisRecentes } from '@/lib/orcamento/bases';
 import { classificarArea, gerarQuadroUrbanistico } from '@/lib/urbanismo/quadro';
 import { gerarEscopo } from '@/lib/briefing/scope';
-import { IFC_EXEMPLO, EPANET_EXEMPLO, SWMM_EXEMPLO, LANDXML_EXEMPLO, PONTOS_EXEMPLO, TABELA_EXEMPLO } from '@/lib/import/exemplos';
+import { IFC_REVIT_QUIRKS, IFC_EXEMPLO, EPANET_EXEMPLO, SWMM_EXEMPLO, LANDXML_EXEMPLO, PONTOS_EXEMPLO, TABELA_EXEMPLO } from '@/lib/import/exemplos';
 
 const q = (r: { itens: { descricao: string; unidade: string; quantidade: number }[] }, re: RegExp, un: string) =>
   r.itens.find((i) => re.test(i.descricao) && i.unidade === un)?.quantidade;
@@ -30,6 +30,20 @@ describe('IFC (BIM)', () => {
     // a porta não tem quantidades de base → aviso parcial
     expect(r.avisos.join(' ')).toMatch(/1 de 5 elementos/);
     expect(r.itens.find((i) => /Tubo/.test(i.descricao))?.disciplina).toBe('hidrossanitario');
+  });
+  it('peculiaridades reais do Revit: unidades, repetidas em mm²/mm³, vazios e telhado', () => {
+    const r = parseIfc('revit.ifc', IFC_REVIT_QUIRKS);
+    // A unidade do projeto é a do IfcUnitAssignment (mm), não a IFCSIUNIT solta em metros.
+    expect(q(r, /Externa 54cm/, 'm')).toBe(22.6);
+    // Entre repetidas vale a convertida; altura não vira "comprimento".
+    expect(q(r, /Externa 54cm/, 'm2')).toBe(48.021);
+    expect(q(r, /Externa 54cm/, 'm3')).toBe(25.11);
+    // Sem repetição: 57.282.798,9 num projeto em mm só pode ser mm² → 57,283 m².
+    expect(q(r, /Interna/, 'm2')).toBe(57.283);
+    expect(r.itens.some((i) => /Opening|OPENING/.test(i.descricao))).toBe(false);
+    expect(r.itens.find((i) => /Telha/.test(i.descricao))?.descricao).toMatch(/^Cobertura/);
+    expect(r.avisos.join(' ')).toMatch(/líquido maior que o bruto/);
+    expect(r.avisos.join(' ')).toMatch(/normalizadas/);
   });
   it('recusa arquivo que não é STEP', () => {
     expect(() => importarArquivo('x.ifc', '<ifcXML/>')).toThrow(/STEP/);

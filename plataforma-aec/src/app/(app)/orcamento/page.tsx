@@ -8,7 +8,11 @@ import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, Field, Input, Segmented, Select } from '@/components/ui/form';
+import { useAuth } from '@/hooks/use-auth';
+import { adicionarDoc, useColecao } from '@/hooks/use-colecao';
 import { useWorkspace } from '@/hooks/use-workspace';
+import { pode } from '@/lib/rbac';
+import type { Project } from '@/lib/types';
 import {
   AJUSTE_ALTO_LUXO_PADRAO, BDI_PADRAO, calcularBdi, calcularOrcamento, COEFICIENTES_NBR12721, PADRAO_LABEL, simularCenarios, tabelaMaisRecente,
   CUB_PROJECT_CODES, type AreaInput, type BdiParams, type CubProjectCode, type CubTable, type ItemNaoIncluso, type PadraoAcabamento, type TipoArea, type TipoEdificacao,
@@ -44,6 +48,11 @@ function useTabelasCub(): { tabelas: CubTable[]; erro?: string } {
 export default function Orcamento() {
   const { tabelas, erro: erroCub } = useTabelasCub();
   const { setOrcamento } = useWorkspace();
+  const { tenantId, role, usuario } = useAuth();
+  const { dados: projetos } = useColecao<Project>('projects');
+  const [projectId, setProjectId] = React.useState('');
+  const projeto = projetos.find((p) => p.id === projectId) ?? projetos[0];
+  const [salvo, setSalvo] = React.useState<'' | 'salvando' | 'ok' | 'erro'>('');
   const [uf, setUf] = React.useState('BA');
   const [padrao, setPadrao] = React.useState<PadraoAcabamento>('medio');
   const [tipo, setTipo] = React.useState<TipoEdificacao>('unifamiliar');
@@ -85,6 +94,20 @@ export default function Orcamento() {
     if (calculo.ok) setOrcamento({ resultado: calculo.resultado, cenarios: calculo.cenarios, prazoObraMeses: calculo.meses });
   }, [calculo, setOrcamento]);
 
+  const salvar = async () => {
+    if (!calculo.ok || !tenantId || !projeto) return;
+    setSalvo('salvando');
+    try {
+      const r = calculo.resultado;
+      await adicionarDoc(tenantId, `projects/${projeto.id}/budgets`, {
+        titulo: `CUB ${r.uf} ${r.competencia} — ${PADRAO_LABEL[r.padrao]}`, tipo: 'cub', status: 'rascunho',
+        total: r.precoVenda, resultado: JSON.parse(JSON.stringify(r)) as Record<string, unknown>,
+        entradas: { uf, padrao, tipoEdificacao: tipo, projetoCub: projetoCub || null, areas: areas.map((a) => ({ ...a, coeficiente: a.coeficiente ?? null })), bdi, itensNaoInclusos: extras, prazoObraMeses: calculo.meses },
+        criadoPor: usuario?.uid ?? '', criadoEm: new Date().toISOString(),
+      });
+      setSalvo('ok');
+    } catch { setSalvo('erro'); }
+  };
   const editarArea = (i: number, patch: Partial<AreaInput>) => setAreas((l) => l.map((a, j) => (j === i ? { ...a, ...patch } : a)));
   let bdiPct = 0;
   try { bdiPct = calcularBdi(bdi); } catch { /* exibido no erro do cálculo */ }
@@ -92,8 +115,14 @@ export default function Orcamento() {
   return (
     <>
       <PageHeader titulo="Orçamento paramétrico — CUB" descricao="Área equivalente (NBR 12721) × CUB estadual, com BDI, cenários e cronograma físico-financeiro.">
+        {pode(role, 'orcamento.editar') && projetos.length > 0 && (<>
+          <Select className="w-56" aria-label="Projeto do orçamento" value={projeto?.id ?? ''} onChange={(e) => setProjectId(e.target.value)}>{projetos.map((p) => <option key={p.id} value={p.id}>{p.codigo} — {p.nome}</option>)}</Select>
+          <Button variant="outline" disabled={!calculo.ok || salvo === 'salvando'} onClick={() => void salvar()}>{salvo === 'salvando' ? 'Salvando…' : 'Salvar no projeto'}</Button>
+        </>)}
         <Link href="/contratos/" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Gerar proposta e contrato</Link>
       </PageHeader>
+      {salvo === 'ok' && <p role="status" className="mb-4 rounded-md border border-success/40 bg-success/5 p-3 text-sm">Orçamento salvo como rascunho no projeto {projeto?.codigo}.</p>}
+      {salvo === 'erro' && <p role="alert" className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">Não foi possível salvar o orçamento. Seus dados continuam nesta tela — tente novamente.</p>}
       {erroCub && <p role="alert" className="mb-4 text-sm text-destructive">Falha ao carregar as tabelas CUB: {erroCub}</p>}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">

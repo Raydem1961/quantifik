@@ -101,7 +101,7 @@ export const processarUploadCad = onObjectFinalized(
         await versaoRef.update({ qtoStatus: 'aguardando_aps', qtoErro: 'DWG armazenado. Configure o APS ou envie o DXF correspondente para extrair quantitativos.' });
       }
     } catch (erro) {
-      logger.error('Falha no QTO', { caminho, erro });
+      logger.error('Falha no QTO', { caminho, erro: erro instanceof Error ? erro.message : String(erro) });
       await versaoRef.update({ qtoStatus: 'erro', qtoErro: erro instanceof Error ? erro.message : String(erro) });
     }
 
@@ -160,7 +160,9 @@ export const despacharNotificacao = onDocumentCreated(
   async (event) => {
     const tenant = (await db.doc(`tenants/${event.params.tenantId}`).get()).data();
     const url = tenant?.webhookUrl as string | undefined;
-    if (!url || !/^https:\/\//.test(url)) return;
+    // Só HTTPS em produção; no emulador local aceita http://localhost para testes.
+    const emulador = process.env.FUNCTIONS_EMULATOR === 'true';
+    if (!url || !(emulador ? /^https?:\/\//.test(url) : /^https:\/\//.test(url))) return;
     const corpo = JSON.stringify({ id: event.params.id, tenantId: event.params.tenantId, ...event.data?.data() });
     const assinatura = createHmac('sha256', WEBHOOK_SIGNING_KEY.value()).update(corpo).digest('hex');
     const r = await fetch(url, {

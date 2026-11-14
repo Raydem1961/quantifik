@@ -63,6 +63,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { carregando, usuario, tenant, role, semVinculo, sair } = useAuth();
 
   React.useEffect(() => { if (!carregando && !usuario) router.replace('/login/'); }, [carregando, usuario, router]);
+  // Portal do Cliente: só o acompanhamento dos próprios projetos.
+  const nav = role === 'cliente' ? NAV.filter((n) => n.href === '/dashboard/') : NAV;
+  React.useEffect(() => { if (role === 'cliente' && caminho !== '/dashboard/' && caminho !== '/dashboard') router.replace('/dashboard/'); }, [role, caminho, router]);
 
   if (carregando || !usuario) return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Carregando…</div>;
   if (semVinculo) {
@@ -90,7 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {nav.map(({ href, label, icon: Icon }) => {
             const ativo = caminho === href || caminho === href.slice(0, -1);
             return (
               <Link key={href} href={href} aria-current={ativo ? 'page' : undefined}
@@ -108,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
           <nav className="flex gap-1 overflow-x-auto md:hidden">
-            {NAV.map(({ href, label, icon: Icon }) => (
+            {nav.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href} aria-label={label} className={cn('rounded-md p-2', caminho.startsWith(href.slice(0, -1)) ? 'bg-accent' : 'text-muted-foreground')}><Icon className="h-4 w-4" /></Link>
             ))}
           </nav>

@@ -34,6 +34,37 @@ Sem `.env.local` o app sobe em **modo demonstração**; com as variáveis `NEXT_
 | `scripts/sync-cad.ps1` | Monitora a pasta local de CAD e envia cada arquivo salvo |
 | `scripts/backup.ps1` | Exporta o Firestore e sincroniza o Storage para um bucket de backup |
 
+## Testes de ponta a ponta (emuladores)
+
+Exercitam Cloud Functions, regras e a interface em modo Firebase real, sem tocar em nenhum projeto
+de produção (projeto fictício `demo-aec`). Requer Java para os emuladores.
+
+```bash
+# 1. segredos e parâmetros locais das Functions (valores de teste)
+printf 'CLICKSIGN_TOKEN=token-teste\nCLICKSIGN_HMAC_SECRET=hmac-teste\nWEBHOOK_SIGNING_KEY=chave-webhook-teste\nAPS_CLIENT_ID=\nAPS_CLIENT_SECRET=\n' > functions/.secret.local
+printf 'CLICKSIGN_BASE_URL=http://127.0.0.1:4180\nAPS_BUCKET=\n' > functions/.env.local
+node scripts/sync-shared.mjs && npm --prefix functions run build
+
+# 2. emuladores (deixe rodando em outro terminal)
+npm run emuladores
+
+# 3. backend: RBAC, upload→versão→quantitativos, auditoria, webhook, assinatura, alertas
+npm run test:e2e:backend
+
+# 4. interface: compile apontando para os emuladores, sirva em :4173 e rode
+NEXT_PUBLIC_FIREBASE_API_KEY=demo NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-aec \
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-aec.appspot.com NEXT_PUBLIC_USE_EMULATORS=1 npm run build
+npx serve out -l 4173 &
+npm run test:e2e:ui
+```
+
+O teste de interface espera a base SINAPI-BA no catálogo de preços (o padrão público serve).
+Os provedores externos (Clicksign e o destino do webhook) são simulados por servidores locais
+dentro dos próprios testes.
+
+Limite do emulador: o gatilho de auditoria recebe um autor fictício, então o `uid` real no log
+só pode ser conferido em um projeto Firebase de verdade.
+
 ## Arquitetura de pastas
 
 ```
@@ -157,6 +188,9 @@ preenchido automaticamente (regras em `REGRAS_CAMADAS_PADRAO`, customizáveis):
 
 - **CUB:** o repositório não traz valores oficiais. As tabelas do modo demo e `data/cub-modelo.csv`
   são ilustrativas; importe a planilha do Sinduscon do seu estado todo mês.
+- **IFC do Revit:** o exportador grava quantidades repetidas e, às vezes, em mm²/mm³; o leitor
+  normaliza e avisa. Quando o próprio modelo traz área líquida maior que a bruta, o leitor só
+  avisa — não há como saber qual valor é o certo.
 - **Sugestões de composição:** vêm de semelhança de texto e erram com frequência em serviços
   parecidos (tubo predial × rede coletora, fornecimento × assentamento). Por isso ficam fora do
   total até serem confirmadas. Itens como "nó de rede" ou "área de parcelas" não têm composição
@@ -165,6 +199,8 @@ preenchido automaticamente (regras em `REGRAS_CAMADAS_PADRAO`, customizáveis):
   contagem. Arquivos muito grandes (centenas de MB) são lidos inteiros em memória.
 - **Pontos topográficos:** a área é a da envoltória convexa, que superestima perímetros côncavos.
 - **Quadro urbanístico** (`urbanismo/quadro.ts`): motor pronto e testado, ainda sem tela.
+- **Portal do Cliente:** o cliente vê o andamento dos próprios projetos; aprovar orçamento e ver
+  contratos pela interface ainda não existe (as regras já permitem).
 - **DWG:** é binário proprietário. A plataforma armazena e versiona; os quantitativos saem do DXF
   (`sync-cad.ps1 -ConverterDxf` gera via AutoCAD) ou da conversão APS, que exige credenciais Autodesk.
 - **Visualizador:** Canvas 2D do model space (linhas, polilinhas, arcos, círculos, elipses,

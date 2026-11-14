@@ -11,7 +11,10 @@
     "test": "vitest run",
     "sync:shared": "node scripts/sync-shared.mjs",
     "cub:import": "node scripts/import-cub.mjs",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-aec \"vitest run -c vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-aec \"vitest run -c vitest.rules.config.ts\"",
+    "test:e2e:backend": "node tests/e2e/backend.e2e.mjs",
+    "test:e2e:ui": "node tests/e2e/ui.e2e.cjs",
+    "emuladores": "firebase emulators:start --project demo-aec --only auth,firestore,storage,functions"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",

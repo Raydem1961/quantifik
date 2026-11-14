@@ -32,7 +32,8 @@ export interface OpcoesColecao {
 }
 
 export function useColecao<T extends { id: string }>(caminho: string | null, opcoes: OpcoesColecao = {}) {
-  const { tenantId } = useAuth();
+  const { tenantId, role, usuario } = useAuth();
+  const uid = usuario?.uid;
   const [estado, setEstado] = React.useState<{ dados: T[]; carregando: boolean; erro?: string }>({ dados: [], carregando: !MODO_DEMO });
   const demo = React.useSyncExternalStore(
     (f) => { ouvintes.add(f); return () => ouvintes.delete(f); },
@@ -42,13 +43,20 @@ export function useColecao<T extends { id: string }>(caminho: string | null, opc
 
   React.useEffect(() => {
     if (MODO_DEMO || !tenantId || !caminho) return;
+    const colecao = collection(db(), 'tenants', tenantId, ...caminho.split('/'));
+    // As regras só deixam o cliente final listar o que é dele: a consulta precisa ter o mesmo filtro.
+    const doCliente = role === 'cliente' && uid
+      ? caminho === 'projects' ? query(colecao, where('clienteUids', 'array-contains', uid))
+        : caminho === 'notifications' ? query(colecao, where('destinatarios', 'array-contains', uid))
+        : null
+      : null;
     const ref = opcoes.grupo
       ? query(collectionGroup(db(), caminho), where('tenantId', '==', tenantId))
-      : collection(db(), 'tenants', tenantId, ...caminho.split('/'));
+      : doCliente ?? colecao;
     return onSnapshot(ref, (snap) => {
       setEstado({ dados: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T), carregando: false });
     }, (e) => setEstado({ dados: [], carregando: false, erro: e.message }));
-  }, [tenantId, caminho, opcoes.grupo]);
+  }, [tenantId, caminho, opcoes.grupo, role, uid]);
 
   return MODO_DEMO ? { dados: demo as unknown as T[], carregando: false, erro: undefined } : estado;
 }
