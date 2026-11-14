@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,13 @@ export default function Login() {
   const [senha, setSenha] = React.useState('');
   const [erro, setErro] = React.useState<string>();
   const [enviando, setEnviando] = React.useState(false);
+  const [info, setInfo] = React.useState<string>();
+  const redefinir = async () => {
+    setErro(undefined); setInfo(undefined);
+    if (!/^\S+@\S+\.\S+$/.test(email)) { setErro('Digite seu e-mail no campo acima e clique de novo em "Esqueci minha senha".'); return; }
+    try { await sendPasswordResetEmail(auth(), email); } catch { /* não revela se o e-mail existe */ }
+    setInfo(`Se ${email} tiver cadastro, enviamos um link para criar uma nova senha. Confira também a caixa de spam.`);
+  };
 
   React.useEffect(() => { if (!carregando && usuario) router.replace('/dashboard/'); }, [carregando, usuario, router]);
 
@@ -38,8 +45,10 @@ export default function Login() {
             <Field label="E-mail"><Input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             <Field label="Senha"><Input type="password" autoComplete="current-password" required value={senha} onChange={(e) => setSenha(e.target.value)} /></Field>
             {erro && <p role="alert" className="text-xs text-destructive">{erro}</p>}
+            {info && <p role="status" className="text-xs text-muted-foreground">{info}</p>}
             <Button type="submit" disabled={enviando || MODO_DEMO}>Entrar</Button>
             <Button variant="outline" disabled={enviando || MODO_DEMO} onClick={() => void entrar(() => signInWithPopup(auth(), new GoogleAuthProvider()))}>Entrar com Google</Button>
+            <button type="button" disabled={MODO_DEMO} onClick={() => void redefinir()} className="text-xs text-primary underline-offset-2 hover:underline disabled:opacity-50">Esqueci minha senha</button>
           </form>
         </CardContent>
       </Card>

@@ -58,6 +58,32 @@ export function mesclar(plataforma, outro, raiz, nomes = ['plataforma', 'outro a
   return `${a.cabecalho}\n    // ═══════════ ${nomes[1]} (regras originais, sem alteração) ═══════════${b.corpo.replace(/\s+$/, '')}\n\n    // ═══════════ ${nomes[0]} ═══════════${a.corpo.replace(/\s+$/, '')}\n  }\n}\n`;
 }
 
+export const MARCA_OUTRO = '═══════════ Aplicativo já publicado (regras originais, sem alteração) ═══════════';
+export const MARCA_PLATAFORMA = '═══════════ Plataforma AEC ═══════════';
+
+/**
+ * Decide o que publicar a partir das regras que estão NO AR no projeto.
+ *  • projeto sem regras, ou só com as da plataforma → regras da plataforma;
+ *  • regras de outro aplicativo → mescla;
+ *  • regras já mescladas numa instalação anterior → separa a parte do outro aplicativo e
+ *    mescla de novo com a versão atual da plataforma (reinstalar não duplica nada).
+ */
+export function combinarComAoVivo(plataforma, aoVivo, raiz) {
+  const vivo = (aoVivo ?? '').trim();
+  if (!vivo) return { regras: plataforma, modo: 'novo' };
+  const iOutro = vivo.indexOf(MARCA_OUTRO), iPlat = vivo.indexOf(MARCA_PLATAFORMA);
+  let outro = vivo;
+  if (iOutro >= 0 && iPlat > iOutro) {
+    const { cabecalho } = miolo(vivo, raiz, 'regras no ar');
+    outro = `${cabecalho}${vivo.slice(iOutro + MARCA_OUTRO.length, vivo.lastIndexOf('//', iPlat))}\n  }\n}\n`;
+  } else {
+    // Só as regras da plataforma (instalação anterior em projeto novo): nada a mesclar.
+    const a = declaracoes(miolo(plataforma, raiz, 'plataforma').corpo), b = declaracoes(miolo(vivo, raiz, 'regras no ar').corpo);
+    if ([...b.caminhos].every((c) => a.caminhos.has(c)) && [...b.funcoes].every((f) => a.funcoes.has(f))) return { regras: plataforma, modo: 'novo' };
+  }
+  return { regras: mesclar(plataforma, outro, raiz, ['Plataforma AEC', 'Aplicativo já publicado']), modo: 'compartilhado' };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const raizProjeto = join(dirname(fileURLToPath(import.meta.url)), '..');
   const outroDir = process.argv[2] && resolve(process.argv[2]);

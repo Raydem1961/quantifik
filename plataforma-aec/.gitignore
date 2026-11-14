@@ -17,3 +17,5 @@ functions/.env.local
 *-debug.log
 .regras-mescladas/
 .firebase.compartilhado.json
+chave-firebase.json
+*firebase-adminsdk*.json

@@ -21,7 +21,10 @@
     "empresa:criar": "node scripts/criar-empresa.mjs",
     "regras:mesclar": "node scripts/mesclar-regras.mjs",
     "test:e2e:offline": "node tests/e2e/offline.e2e.cjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "instalar": "node scripts/instalar.mjs",
+    "usuarios": "node scripts/usuarios.mjs",
+    "test:instalador": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/instalador.e2e.mjs\""
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",

@@ -10,6 +10,14 @@ infraestrutura viária, topografia, saneamento (esgoto e drenagem) e redes de ab
 **Stack:** Next.js 14 (App Router, exportação estática) · TypeScript · Tailwind + componentes no padrão
 shadcn/ui · Firebase (Auth, Firestore, Storage, Functions 2ª geração, Hosting) · PowerShell.
 
+## Instalar sem programar
+
+No Windows, dê dois cliques em **`INSTALAR.cmd`** (instruções em linguagem simples no
+`LEIA-ME.txt`). Ele guia o download da chave de acesso, preserva as regras de segurança que já
+estão no ar, publica em um endereço próprio, cria a empresa e o primeiro Sócio-Diretor e, se
+encontrar o ObraTop no mesmo projeto, simula e oferece a migração dos dados. Pode ser executado
+de novo a qualquer momento. **`USUARIOS.cmd`** dá acesso às demais pessoas da equipe.
+
 ## Começar
 
 ```powershell

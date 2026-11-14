@@ -1,0 +1,41 @@
+PLATAFORMA AEC — COMO COLOCAR NO AR
+====================================
+
+Você NÃO precisa saber programar. São dois cliques e algumas perguntas.
+
+O QUE PRECISA TER NO COMPUTADOR
+  • Node.js (o mesmo que você já usa para publicar o ObraTop).
+    Se não tiver, o instalador abre o site para baixar.
+
+PASSO A PASSO
+  1. Dê dois cliques em  INSTALAR.cmd
+  2. Na primeira vez ele abre uma página do Firebase no navegador.
+     Clique no botão azul "Gerar nova chave privada" e depois em "Gerar chave".
+     Um arquivo é baixado sozinho — volte para a janela preta e aguarde.
+  3. Responda às perguntas (nome da empresa e seu e-mail). Para aceitar a
+     sugestão entre colchetes, só aperte Enter.
+  4. Se ele encontrar os dados do ObraTop, mostra quantos registros existem e
+     pergunta se pode copiar. O ObraTop NÃO é alterado.
+  5. No fim aparece o endereço do aplicativo e ele abre no navegador.
+     Entre com o mesmo e-mail e senha que você usa no ObraTop.
+
+O QUE O INSTALADOR FAZ (E O QUE ELE NÃO FAZ)
+  • Publica a plataforma em um endereço NOVO. O endereço do ObraTop continua
+    igual, com o ObraTop funcionando.
+  • Mantém as regras de segurança do ObraTop e acrescenta as da plataforma.
+    Antes de qualquer mudança, guarda uma cópia das regras atuais na pasta
+    "backups".
+  • Não apaga nada. Pode ser executado quantas vezes quiser: ele só atualiza.
+
+DAR ACESSO A OUTRAS PESSOAS
+  Dois cliques em  USUARIOS.cmd , informe o e-mail e escolha o papel
+  (Sócio-Diretor, Coordenador, Orçamentista, Projetista ou Cliente).
+
+SE APARECER UM AVISO SOBRE "FUNÇÕES DO SERVIDOR"
+  Elas exigem o plano pago por uso (Blaze) do Firebase. O aplicativo funciona
+  sem elas. Ficam de fora: processamento de CAD no servidor, auditoria
+  automática, notificações e assinatura de contrato.
+
+GUARDE BEM
+  O arquivo  chave-firebase.json  que aparece nesta pasta dá acesso total ao
+  seu projeto Firebase. Não envie para ninguém nem publique na internet.
