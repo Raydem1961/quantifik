@@ -26,6 +26,13 @@ service firebase.storage {
         && request.resource.size < 30 * 1024 * 1024;
     }
 
+    // Documentos das obras (módulo Documentos): qualquer tipo de arquivo, até 10 MB, imutável.
+    match /tenants/{tenantId}/documents/{pasta}/{arquivo} {
+      allow read: if equipe(tenantId);
+      allow create: if equipe(tenantId) && request.resource.size <= 10 * 1024 * 1024;
+      allow delete: if gestor(tenantId);
+    }
+
     // Logotipo (white-label).
     match /tenants/{tenantId}/branding/{arquivo} {
       allow read: if doTenant(tenantId);

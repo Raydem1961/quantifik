@@ -6,7 +6,7 @@
  * caixa, caminho crítico, MS Project) são os módulos originais do ObraTop, sem alteração.
  */
 import * as React from 'react';
-import { Download, FileText, FileUp, Flag, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { CalendarRange, Download, FileText, FileUp, Flag, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { GanttObra, type AtividadeGantt } from '@/components/gestao/gantt-obra';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,9 @@ import { brl, dataBr, num, pct } from '@/lib/format';
 import { COLECAO_DA_REFERENCIA, ESQUEMAS, GRUPOS_MODULOS, MODULOS, rotuloRegistro, type CampoEsquema, type EsquemaModulo, type IdModulo } from '@/lib/obratop/esquemas';
 import { activityWeights, budgetSale, cashProjection, contractBalance, incurredCost, measurementNet, schedulePerformance } from '@/lib/obratop/vendor/calc.mjs';
 import { cpm, mspdiExport, parseMspdi, toActivities } from '@/lib/obratop/vendor/msproject.mjs';
+import { cronogramaDoOrcamento } from '@/lib/obratop/integracao';
+import { MODO_DEMO, storage } from '@/lib/firebase/client';
+import { getDownloadURL, ref as refArquivo, uploadBytes } from 'firebase/storage';
 import { cn } from '@/lib/utils';
 
 type Reg = { id: string; deleted?: boolean } & Record<string, unknown>;
@@ -104,14 +107,24 @@ export default function Gestao() {
     return [...curtas.filter((f) => f[3]), ...curtas.filter((f) => !f[3])].slice(0, 7);
   }, [esquema]);
 
-  const salvar = async (dados: Record<string, unknown>, id?: string) => {
+  const salvar = async (dados: Record<string, unknown>, id?: string, arquivo?: File | null) => {
     if (!tenantId) return;
     try {
       const agora = new Date().toISOString();
+      if (arquivo) {
+        if (arquivo.size > 10 * 1024 * 1024) { setMsg({ tipo: 'erro', texto: 'O arquivo deve ter no máximo 10 MB.' }); return; }
+        if (MODO_DEMO) setMsg({ tipo: 'erro', texto: 'Modo demonstração: o arquivo não foi enviado; o registro foi salvo sem ele.' });
+        else {
+          // Mesmos campos do ObraTop: fileUrl, fileName e storagePath.
+          const caminho = `tenants/${tenantId}/documents/${String(dados.workId || 'general')}/${crypto.randomUUID()}-${arquivo.name.replace(/[^\w.()-]/g, '_')}`;
+          const snap = await uploadBytes(refArquivo(storage(), caminho), arquivo, { contentType: arquivo.type || 'application/octet-stream' });
+          dados = { ...dados, fileUrl: await getDownloadURL(snap.ref), fileName: arquivo.name, storagePath: caminho };
+        }
+      }
       if (id) await atualizarDoc(tenantId, `${modulo}/${id}`, { ...dados, updatedAt: agora, updatedBy: usuario?.uid ?? '' });
       else await definirDoc(tenantId, `${modulo}/${novoId()}`, { ...dados, deleted: false, createdAt: agora, createdBy: usuario?.uid ?? '', updatedAt: agora });
       setEditando(null);
-      setMsg({ tipo: 'ok', texto: `${esquema.title}: registro ${id ? 'atualizado' : 'criado'}.` });
+      if (!(arquivo && MODO_DEMO)) setMsg({ tipo: 'ok', texto: `${esquema.title}: registro ${id ? 'atualizado' : 'criado'}.` });
     } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível salvar. Seus dados continuam no formulário — verifique a conexão e a permissão.' }); }
   };
   const excluir = async (r: Reg) => {
@@ -148,6 +161,23 @@ export default function Gestao() {
     link.download = `${String(obraSel.name ?? 'obra').replace(/[^\w\-]+/g, '_')}.xml`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 30000);
+  };
+
+  // ── Cronograma a partir do orçamento (algoritmo original do ObraTop) ──────
+  const gerarCronograma = async () => {
+    const obra = obras.find((o) => o.id === obraId);
+    if (!tenantId || !obra) return;
+    try {
+      const existentes = vivos(atividades).filter((a) => a.workId === obra.id);
+      const g = cronogramaDoOrcamento(vivos(orcamentos), obra.id, { start: String(obra.start ?? ''), end: String(obra.end ?? '') }, existentes);
+      const manuais = existentes.filter((a) => !String(a.id).startsWith('orc-')).length;
+      if (!window.confirm(`Gerar ${g.atividades.length} atividades entre ${dataBr(String(obra.start))} e ${dataBr(String(obra.end))}?\n\n${g.porHoras} com duração pelas horas de mão de obra; as demais, pelo custo.\nAvanços já lançados nas atividades geradas antes são preservados.${manuais ? `\nAs ${manuais} atividades cadastradas à mão não são alteradas.` : ''}`)) return;
+      const agora = new Date().toISOString();
+      for (const { id, ...dados } of g.atividades) await definirDoc(tenantId, `activities/${id}`, { ...dados, deleted: false, createdAt: agora, createdBy: usuario?.uid ?? '', updatedAt: agora });
+      setMsg({ tipo: g.cabe ? 'ok' : 'erro', texto: g.cabe
+        ? `Cronograma gerado: ${g.atividades.length} atividades em ${g.diasUteis} dias úteis (prazo de ${g.diasUteisDoPrazo}). Veja em Cronograma → Gantt.`
+        : `Cronograma gerado, mas NÃO cabe no prazo: precisa de ${g.diasUteis} dias úteis e a obra tem ${g.diasUteisDoPrazo}. Amplie o término da obra ou reduza o escopo.` });
+    } catch (e) { setMsg({ tipo: 'erro', texto: `Não foi possível gerar o cronograma: ${e instanceof Error ? e.message : 'erro desconhecido'}` }); }
   };
 
   // ── Linha de base (mesma estrutura do ObraTop: works/{id}.baseline + baselineHistory) ──
@@ -308,6 +338,7 @@ export default function Gestao() {
             {modulo === 'activities' && obraSel && gravavel && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-4 w-4" />Importar XML
               <input type="file" accept=".xml" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importarProject(a); }} /></label>}
             {modulo === 'activities' && obraSel && (role === 'socio_diretor' || role === 'coordenador') && <Button variant="outline" onClick={() => void congelarLinhaBase()}><Flag className="h-4 w-4" />{linhaBase ? `Replanejar (base rev. ${linhaBase.revision})` : 'Congelar linha de base'}</Button>}
+            {modulo === 'budgets' && obraId && (role === 'socio_diretor' || role === 'coordenador') && <Button variant="outline" onClick={() => void gerarCronograma()}><CalendarRange className="h-4 w-4" />Gerar cronograma</Button>}
             {gravavel && <Button onClick={() => setEditando('novo')}><Plus className="h-4 w-4" />Novo</Button>}
           </div>
         </CardHeader>
@@ -323,6 +354,7 @@ export default function Gestao() {
                     {modulo === 'measurements' && <th className="px-2 py-2 text-right font-medium">Líquido</th>}
                     {modulo === 'contracts' && <th className="px-2 py-2 text-right font-medium">Saldo a medir</th>}
                     {modulo === 'budgets' && <th className="px-2 py-2 text-right font-medium">Preço de venda</th>}
+                    {modulo === 'documents' && <th className="px-2 py-2 font-medium">Arquivo</th>}
                     <th className="w-20" />
                   </tr></thead>
                   <tbody className="divide-y">
@@ -332,6 +364,7 @@ export default function Gestao() {
                         {modulo === 'measurements' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(measurementNet(r).net)}</td>}
                         {modulo === 'contracts' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(contractBalance(r, medicoes).balance)} <span className="font-normal text-muted-foreground">({pct(contractBalance(r, medicoes).percentLeft / 100, 0)})</span></td>}
                         {modulo === 'budgets' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(budgetSale(r))}</td>}
+                        {modulo === 'documents' && <td className="max-w-[200px] truncate px-2 py-2">{r.fileUrl ? <a href={String(r.fileUrl)} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{String(r.fileName ?? 'abrir')}</a> : <span className="text-muted-foreground">—</span>}</td>}
                         <td className="whitespace-nowrap py-1 text-right">
                           {gravavel && <><Button size="icon" variant="ghost" aria-label={`Editar ${rotuloRegistro(modulo, r)}`} onClick={() => { setEditando(r); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Pencil className="h-4 w-4" /></Button>
                             <Button size="icon" variant="ghost" aria-label={`Excluir ${rotuloRegistro(modulo, r)}`} onClick={() => void excluir(r)}><Trash2 className="h-4 w-4" /></Button></>}
@@ -350,7 +383,7 @@ export default function Gestao() {
 
 function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCancelar, onSalvar }: {
   esquema: EsquemaModulo; modulo: IdModulo; registro: Reg | null; obraPadrao: string; referencias: Partial<Record<IdModulo, Reg[]>>;
-  onCancelar: () => void; onSalvar: (dados: Record<string, unknown>, id?: string) => Promise<void>;
+  onCancelar: () => void; onSalvar: (dados: Record<string, unknown>, id?: string, arquivo?: File | null) => Promise<void>;
 }) {
   const [v, setV] = React.useState<Record<string, string>>(() => {
     const ini: Record<string, string> = {};
@@ -359,6 +392,7 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
   });
   const [erros, setErros] = React.useState<Record<string, string>>({});
   const [salvando, setSalvando] = React.useState(false);
+  const [arquivo, setArquivo] = React.useState<File | null>(null);
   const campos = esquema.fields.filter((f) => f[2] !== 'file');
   const temArquivo = esquema.fields.some((f) => f[2] === 'file');
 
@@ -386,7 +420,7 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
     setErros(e);
     if (Object.keys(e).length) return;
     setSalvando(true);
-    await onSalvar(dados, registro?.id);
+    await onSalvar(dados, registro?.id, arquivo);
     setSalvando(false);
   };
 
@@ -414,7 +448,12 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
           <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-3">
             <Button type="submit" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Button>
             <Button variant="ghost" onClick={onCancelar}>Cancelar</Button>
-            {temArquivo && <span className="text-[11px] text-muted-foreground">Envio de arquivo ainda não disponível aqui: informe o link HTTPS do documento.</span>}
+            {temArquivo && (
+              <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-xs font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring">
+                <Paperclip className="h-3.5 w-3.5" />{arquivo ? `${arquivo.name} (${(arquivo.size / 1024).toFixed(0)} kB)` : registro?.fileName ? `Substituir ${String(registro.fileName)}` : 'Anexar arquivo (até 10 MB)'}
+                <input type="file" className="sr-only" onChange={(ev) => setArquivo(ev.target.files?.[0] ?? null)} />
+              </label>
+            )}
           </div>
         </form>
       </CardContent>

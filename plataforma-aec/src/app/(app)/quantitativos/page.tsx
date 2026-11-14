@@ -20,6 +20,7 @@ import { EPANET_EXEMPLO, IFC_EXEMPLO, LANDXML_EXEMPLO, PONTOS_EXEMPLO, SWMM_EXEM
 import { buscarComposicoes, calcularOrcamentoAnalitico, chaveVinculo, indexarBase, resolverVinculos, type IndiceBase, type LinhaOrcamento, type Vinculo } from '@/lib/orcamento/analitico';
 import { carregarBase, carregarCatalogo, maisRecentes, type EntradaCatalogo } from '@/lib/orcamento/bases';
 import { MODO_DEMO } from '@/lib/firebase/client';
+import { analiticoParaOrcamento } from '@/lib/obratop/integracao';
 import { brl, num, pct } from '@/lib/format';
 import { pode } from '@/lib/rbac';
 import { DISCIPLINA_LABEL, type Disciplina, type Project } from '@/lib/types';
@@ -185,6 +186,25 @@ export default function Quantitativos() {
     for (const l of sugeridas) if (l.vinculo) await vincular(l, l.vinculo.codigo, l.vinculo.fator);
   };
 
+  const { dados: obrasBrutas } = useColecao<{ id: string; name?: string; deleted?: boolean }>('works');
+  const obras = obrasBrutas.filter((o) => !o.deleted);
+  const [obraDestino, setObraDestino] = React.useState('');
+  /** Leva as linhas com composição confirmada para o orçamento da obra (Gestão de obras). */
+  const enviarParaObra = async () => {
+    const obra = obras.find((o) => o.id === obraDestino);
+    if (!tenantId || !orcamento || !obra) return;
+    const itens = analiticoParaOrcamento(
+      orcamento.linhas.filter((l) => l.estado === 'confirmado').map((l) => ({ id: l.item.id, descricao: l.item.descricao, disciplina: DISCIPLINA_LABEL[l.item.disciplina], unidade: l.item.unidade, quantidade: l.item.quantidade * (l.vinculo?.fator ?? 1), codigo: l.vinculo?.codigo ?? '', precoUnitario: l.precoUnitario })),
+      obra.id, Math.max(0, bdi), `${orcamento.base.source} ${orcamento.base.uf} ${orcamento.base.reference}`,
+    );
+    if (!itens.length) { setMensagens([{ tipo: 'erro', texto: 'Não há linhas com composição confirmada para enviar.' }]); return; }
+    try {
+      const agora = new Date().toISOString();
+      for (const { id, ...dados } of itens) await definirDoc(tenantId, `budgets/${id}`, { ...dados, deleted: false, createdAt: agora, createdBy: usuario?.uid ?? '', updatedAt: agora });
+      setMensagens([{ tipo: 'info', texto: `${itens.length} item(ns) enviados ao orçamento da obra "${obra.name}". Em Gestão de obras → Orçamentos você pode gerar o cronograma.` }]);
+    } catch { setMensagens([{ tipo: 'erro', texto: 'Não foi possível enviar ao orçamento da obra. Verifique sua permissão e a conexão.' }]); }
+  };
+
   const sugeridas = orcamento?.linhas.filter((l) => l.estado === 'sugerido').length ?? 0;
   const grupos = React.useMemo(() => {
     const m = new Map<Disciplina, LinhaOrcamento[]>();
@@ -243,6 +263,12 @@ export default function Quantitativos() {
             <Card>
               <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
                 <div><CardTitle>Planilha orçamentária</CardTitle><CardDescription className="mt-1">Só vínculos confirmados entram no preço. Um vínculo confirmado vale para todos os projetos do escritório.</CardDescription></div>
+                {podeEditar && obras.length > 0 && orcamento && orcamento.custoDireto > 0 && (
+                  <span className="flex items-center gap-2">
+                    <Select className="h-8 w-52 text-xs" aria-label="Obra de destino" value={obraDestino} onChange={(e) => setObraDestino(e.target.value)}><option value="">Enviar à obra…</option>{obras.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>
+                    <Button size="sm" variant="outline" disabled={!obraDestino} onClick={() => void enviarParaObra()}>Enviar ao orçamento</Button>
+                  </span>
+                )}
                 {podeEditar && sugeridas > 0 && <Button size="sm" variant="outline" onClick={() => void confirmarSugestoes()}><Sparkles className="h-3.5 w-3.5" />Confirmar {sugeridas} sugestões</Button>}
               </CardHeader>
               <CardContent className="overflow-x-auto">

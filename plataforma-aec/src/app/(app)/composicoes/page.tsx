@@ -6,7 +6,7 @@
  * navegador de cada pessoa.
  */
 import * as React from 'react';
-import { Copy, Download, FileDown, FileUp, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { Copy, Download, FileDown, FileUp, Plus, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import {
   type BaseComposicoes, type Composicao, type Cotacao, type LinhaCusto, type Medidas, type ParametrosPreco, type TipoInsumo,
 } from '@/lib/composicoes/motor';
 import { PISOS } from '@/lib/composicoes/tabelas';
+import { cotacaoParaOrcamento } from '@/lib/obratop/integracao';
 import { CATALOGO_PADRAO } from '@/lib/orcamento/bases';
 import { brl, num } from '@/lib/format';
 import { pode } from '@/lib/rbac';
@@ -104,6 +105,9 @@ export default function Composicoes() {
   const [idCotacao, setIdCotacao] = React.useState('');
   const cotacao = ordenadas.find((c) => c.id === idCotacao) ?? ordenadas[0];
   const [msg, setMsg] = React.useState<{ tipo: 'ok' | 'erro'; texto: string }>();
+  const { dados: obrasBrutas } = useColecao<{ id: string; name?: string; deleted?: boolean }>('works');
+  const obras = obrasBrutas.filter((o) => !o.deleted);
+  const [obraDestino, setObraDestino] = React.useState('');
   const gravar = async (c: DocCotacao) => {
     if (!tenantId) return;
     try { await definirDoc(tenantId, `cotacoes/${c.id}`, c); } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível salvar a cotação. Verifique sua permissão e a conexão.' }); }
@@ -126,6 +130,20 @@ export default function Composicoes() {
   // As cotações podem misturar bases: carrega as que faltarem.
   React.useEffect(() => { if (cotacao?.itens.some((i) => i.base === 'orse') && !bases.orse && !erroBase.orse) carregar('orse'); }, [cotacao, bases.orse, erroBase.orse, carregar]);
   const calculo = React.useMemo(() => (cotacao ? calcularCotacao(cotacao, bases, params) : null), [cotacao, bases, params]);
+
+  /** Leva os serviços da cotação para o orçamento da obra (módulo Gestão de obras). */
+  const enviarParaObra = async () => {
+    const obra = obras.find((o) => o.id === obraDestino);
+    if (!tenantId || !cotacao || !calculo || !obra) return;
+    const itens = cotacaoParaOrcamento(cotacao, calculo, obra.id);
+    if (!itens.length) { setMsg({ tipo: 'erro', texto: 'Nenhum serviço da cotação pôde ser enviado (não encontrados na base atual).' }); return; }
+    try {
+      const agora = new Date().toISOString();
+      for (const { id, ...dados } of itens) await definirDoc(tenantId, `budgets/${id}`, { ...dados, deleted: false, createdAt: agora, createdBy: usuario?.uid ?? '', updatedAt: agora });
+      const faltaram = cotacao.itens.length - itens.length;
+      setMsg({ tipo: 'ok', texto: `${itens.length} serviço(s) da cotação ${cotacao.numero} no orçamento da obra "${obra.name}".${faltaram ? ` ${faltaram} ficou(aram) de fora por não estar(em) na base atual.` : ''} Em Gestão de obras → Orçamentos você pode gerar o cronograma.` });
+    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível enviar ao orçamento da obra. Verifique sua permissão e a conexão.' }); }
+  };
 
   const gerarPdf = async () => {
     if (!cotacao || !calculo || !tenant) return;
@@ -296,6 +314,14 @@ export default function Composicoes() {
             {podeEditar && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-4 w-4" />Importar
               <input type="file" accept=".json,application/json" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importar(a); }} /></label>}
             <Button disabled={!cotacao || !calculo || !cotacao.itens.length} onClick={() => void gerarPdf()}><Download className="h-4 w-4" />Baixar PDF</Button>
+            {podeEditar && cotacao && cotacao.itens.length > 0 && obras.length > 0 && (
+              <div className="flex w-full flex-wrap items-end gap-2 border-t pt-3">
+                <Field label="Levar esta cotação para o orçamento de uma obra" className="min-w-[240px] flex-1">
+                  <Select value={obraDestino} onChange={(e) => setObraDestino(e.target.value)}><option value="">Escolha a obra…</option>{obras.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</Select>
+                </Field>
+                <Button variant="outline" disabled={!obraDestino} onClick={() => void enviarParaObra()}><Send className="h-4 w-4" />Enviar ao orçamento da obra</Button>
+              </div>
+            )}
           </CardContent></Card>
 
           {!cotacao ? <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">Nenhuma cotação ainda. Crie uma ou adicione um serviço pela aba Serviços.</CardContent></Card> : (

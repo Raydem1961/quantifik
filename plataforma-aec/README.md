@@ -199,6 +199,28 @@ os projetos. Números da descrição (DN, espessura, fck) são obrigatórios na 
 **Tempo real.** A tela assina `quantities` e `vinculos` com `onSnapshot`: uma nova revisão enviada
 (pela tela, pelo `sync-cad.ps1` ou por um colega) recalcula o orçamento de todos na hora.
 
+## Fluxo integrado
+
+Os três aplicativos de origem agora se alimentam (`src/lib/obratop/integracao.ts`):
+
+```
+Cotação (Serviços & Cotações) ─┐
+                               ├─► Orçamento da obra ─► Cronograma ─► Gantt, linha de base,
+Orçamento analítico (BIM/CAD) ─┘   (Gestão de obras)    gerado         medições, relatório
+```
+
+- **Enviar ao orçamento da obra:** cada serviço da cotação, ou cada linha confirmada do orçamento
+  analítico, vira um item do orçamento da obra com custo unitário, BDI e, no caso da cotação, a
+  composição de insumos.
+- **Gerar cronograma:** usa o algoritmo original do ObraTop (`scheduleBudget`). As categorias do
+  orçamento viram etapas; a duração de cada atividade é proporcional às horas de mão de obra da
+  composição (ou ao custo, quando não há composição), ajustada ao prazo da obra. Como cada
+  atividade nasce ligada ao seu item de orçamento, o avanço ponderado passa a usar o custo.
+- **Sem duplicar:** os ids são determinísticos. Reenviar a cotação ou gerar o cronograma de novo
+  atualiza os mesmos registros e preserva avanços já lançados; atividades cadastradas à mão não
+  são tocadas.
+- **Painel inicial:** mostra o avanço planejado × realizado das obras em execução.
+
 ## Gestão de obras (ObraTop integrado)
 
 Tela `/gestao`. Traz os 15 módulos do ObraTop 3.39.13.0: obras, medições, diário de obra,
@@ -220,13 +242,14 @@ qualidade, segurança, pessoal e documentos.
 
 - **Linha de base.** Congelar e replanejar gravam `baseline` e `baselineHistory` na obra, no
   mesmo formato do ObraTop; o avanço planejado e o Gantt passam a comparar com ela.
+- **Documentos com anexo:** arquivo de até 10 MB no Storage, com os mesmos campos do ObraTop
+  (`fileUrl`, `fileName`, `storagePath`).
 - **Relatório da obra em PDF:** desempenho, cronograma com folgas e caminho crítico, medições,
   contratos e fluxo de caixa projetado.
 
 Ainda não trazido do ObraTop: convites e membros (a plataforma usa papéis próprios), restrição
-de usuário por obra, pontos de restauração, geração de cronograma a
-partir do orçamento, orçamento com composições próprias (`orcamento-ui`), análise econômica
-(`economics-ui`), modelos de obra, envio de arquivo em Documentos, os demais relatórios em PDF, manual
+de usuário por obra, pontos de restauração, orçamento com composições próprias (`orcamento-ui`), análise econômica
+(`economics-ui`), modelos de obra, os demais relatórios em PDF, manual
 e a interface própria para celular. "Obras" (execução) e "projetos" (escritório de projeto) são
 cadastros separados, ainda sem vínculo entre si.
 

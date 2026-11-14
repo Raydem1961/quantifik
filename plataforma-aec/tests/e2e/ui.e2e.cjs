@@ -131,7 +131,7 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
 
     console.log('\n4. CAD: upload, versão e marcação');
     await p.goto(`${APP}/cad/`, { waitUntil: 'load' });
-    await p.getByLabel('Projeto', { exact: true }).selectOption({ label: 'RES-1 — Casa Teste' });
+    await p.getByRole('combobox', { name: /^Projeto/ }).selectOption({ label: 'RES-1 — Casa Teste' });
     await p.locator('input[type=file]').setInputFiles(arquivo('planta-teste.dxf', DXF));
     checar('pré-visualização imediata: 120 m² na camada', await p.getByRole('row', { name: /A-AREA-PRIV\s*120,00/ }).waitFor({ timeout: 10000 }).then(() => true, () => false));
     checar('revisão R00 aparece na lista após o processamento no servidor', await p.getByText('R00 · 1 rev.').waitFor({ timeout: 30000 }).then(() => true, () => false));
@@ -158,7 +158,7 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
 
     console.log('\n6. Importação universal e orçamento analítico');
     await p.goto(`${APP}/quantitativos/`, { waitUntil: 'load' });
-    await p.getByLabel('Projeto', { exact: true }).selectOption({ label: 'LOT-1 — Loteamento Teste' });
+    await p.getByRole('combobox', { name: /^Projeto/ }).selectOption({ label: 'LOT-1 — Loteamento Teste' });
     await p.locator('input[type=file]').setInputFiles([arquivo('esgoto.inp', SWMM), arquivo('modelo.rvt', 'binario')]);
     await p.getByText('Planilha orçamentária').waitFor({ timeout: 20000 });
     checar('arquivo nativo (.rvt) recebe orientação de exportar IFC', await p.getByRole('alert').filter({ hasText: /modelo\.rvt.*IFC/ }).waitFor({ timeout: 10000 }).then(() => true, () => false));
@@ -182,7 +182,7 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     console.log('\n7. Contrato, PDF e assinatura');
     await p.getByRole('link', { name: /Gerar proposta/ }).click();
     await p.waitForURL('**/contratos/');
-    await p.getByLabel('Projeto', { exact: true }).selectOption({ label: 'LOT-1 — Loteamento Teste' });
+    await p.getByRole('combobox', { name: /^Projeto/ }).selectOption({ label: 'LOT-1 — Loteamento Teste' });
     checar('loteamento usa a estimativa por composições', await p.getByLabel('Estimativa de obra no documento').inputValue() === 'analitico');
     checar('cláusulas seguem as disciplinas (urbanismo sim, estrutural não)', await p.locator('p', { hasText: '1.8. O projeto urbanístico' }).isVisible() && (await p.locator('p', { hasText: '1.3. O projeto estrutural' }).count()) === 0);
     await p.getByRole('button', { name: 'Gerar PDF' }).click();
@@ -255,7 +255,39 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     await p.getByRole('button', { name: /^Excluir 1\.3 Acabamentos/ }).click();
     checar('exclusão é lógica: o registro continua no banco com deleted', await ate(async () => { const d = (await adb.doc(`tenants/${T}/activities/a3`).get()).data(); return d?.deleted === true && d?.name === 'Acabamentos'; }));
 
-    console.log('\n10. Papéis');
+    console.log('\n10. Fluxo integrado: cotação → orçamento da obra → cronograma; documentos');
+    await p.goto(`${APP}/composicoes/`, { waitUntil: 'load' });
+    await p.getByRole('tab', { name: /Cotações/ }).click();
+    await p.getByRole('combobox', { name: /Levar esta cotação/ }).selectOption({ label: 'Obra E2E' });
+    await p.getByRole('button', { name: 'Enviar ao orçamento da obra' }).click();
+    const itemOrc = await ate(async () => { const s = await adb.collection(`tenants/${T}/budgets`).where('workId', '==', obra.id).get(); return s.empty ? null : s.docs[0]; });
+    const io = itemOrc?.data();
+    checar('serviço da cotação vira item do orçamento da obra, com composição', io?.qty === 30 && io?.unitValue > 0 && io?.bdi === cot.bdi && io?.sourceCode === 'SINAPI 103368' && io?.composition?.some((c) => c.kind === 'Mão de obra' && c.unit === 'h'), JSON.stringify({ q: io?.qty, v: io?.unitValue, b: io?.bdi }));
+    await p.getByRole('button', { name: 'Enviar ao orçamento da obra' }).click();
+    await p.waitForTimeout(1500);
+    checar('reenviar a cotação não duplica o item', (await adb.collection(`tenants/${T}/budgets`).where('workId', '==', obra.id).get()).size === 1);
+    await p.goto(`${APP}/gestao/?m=budgets`, { waitUntil: 'load' });
+    await p.getByRole('combobox', { name: 'Filtrar por obra' }).selectOption({ label: 'Obra E2E' });
+    p.once('dialog', (d) => d.accept());
+    await p.getByRole('button', { name: 'Gerar cronograma' }).click();
+    const gerada = await ate(async () => (await adb.doc(`tenants/${T}/activities/orc-${itemOrc.id}`).get()).data());
+    checar('cronograma gerado do orçamento, ligado ao item e dentro do prazo da obra', gerada?.budgetId === itemOrc.id && gerada?.start >= '2026-01-05' && gerada?.end <= '2026-06-30' && gerada?.laborHours > 0 && gerada?.plannedQty === 30, JSON.stringify(gerada));
+    checar('atividades cadastradas antes não foram alteradas', (await adb.doc(`tenants/${T}/activities/a1`).get()).data().name === 'Fundações');
+    // documento com anexo
+    await p.goto(`${APP}/gestao/?m=documents`, { waitUntil: 'load' });
+    await p.getByRole('button', { name: 'Novo' }).click();
+    await p.getByLabel('Nome do documento *').fill('Alvará de construção');
+    await p.getByLabel('Categoria *').fill('Licenças');
+    await p.locator('form input[type=file]').setInputFiles(arquivo('alvara.pdf', '%PDF-1.4 alvara de teste'));
+    await p.getByRole('button', { name: 'Salvar' }).click();
+    const docArq = await ate(async () => { const s = await adb.collection(`tenants/${T}/documents`).get(); return s.empty ? null : s.docs[0].data(); });
+    checar('documento salvo com anexo no Storage (campos do ObraTop)', docArq?.fileName === 'alvara.pdf' && /^tenants\/atelier\/documents\/general\//.test(docArq?.storagePath ?? '') && /^http/.test(docArq?.fileUrl ?? ''), JSON.stringify(docArq));
+    const baixado = docArq?.fileUrl ? await (await fetch(docArq.fileUrl)).text() : '';
+    checar('o anexo pode ser baixado e é o arquivo enviado', baixado === '%PDF-1.4 alvara de teste');
+    await p.goto(`${APP}/dashboard/`, { waitUntil: 'load' });
+    checar('painel inicial mostra as obras em execução', await p.getByText('Obras em execução').waitFor({ timeout: 15000 }).then(() => true, () => false) && await p.getByRole('progressbar', { name: 'Realizado — Obra E2E' }).isVisible());
+
+    console.log('\n11. Papéis');
     p = await novaPagina();
     await entrar(p, 'projetista@atelier.test');
     await p.waitForURL('**/dashboard/');

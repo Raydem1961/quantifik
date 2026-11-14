@@ -12,6 +12,7 @@ import { Segmented } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
 import { useColecao } from '@/hooks/use-colecao';
 import { brlCompacto, diasAte, num, pct } from '@/lib/format';
+import { weightedProgress } from '@/lib/obratop/vendor/calc.mjs';
 import { pode } from '@/lib/rbac';
 import type { ArtRrt, Project, TimesheetEntry } from '@/lib/types';
 
@@ -37,6 +38,19 @@ export default function Dashboard() {
   // Só gestores podem ler as horas de toda a equipe (regra de segurança) — os demais não consultam.
   const { dados: horas } = useColecao<TimesheetEntry>(gestor ? 'timesheets' : null, { grupo: true });
   const [visao, setVisao] = React.useState<'kanban' | 'gantt'>('kanban');
+  // Obras em execução (módulo Gestão de obras): avanço planejado × realizado.
+  type Reg = { id: string; deleted?: boolean } & Record<string, unknown>;
+  const { dados: obras } = useColecao<Reg>(cliente ? null : 'works');
+  const { dados: atividades } = useColecao<Reg>(cliente ? null : 'activities');
+  const { dados: itensOrcamento } = useColecao<Reg>(cliente ? null : 'budgets');
+  const andamentoObras = React.useMemo(() => {
+    const dia = new Date().toISOString().slice(0, 10);
+    return obras.filter((o) => !o.deleted && o.status !== 'Concluída').map((o) => {
+      const acts = atividades.filter((a) => !a.deleted && a.workId === o.id);
+      const args = { acts, budgets: itensOrcamento.filter((b) => !b.deleted), works: [o], day: dia };
+      return { obra: o, n: acts.length, planejado: weightedProgress({ ...args, planned: true }), realizado: weightedProgress(args) };
+    });
+  }, [obras, atividades, itensOrcamento]);
 
   const ativos = projetos.filter((p) => p.status !== 'concluido');
   const carteira = ativos.reduce((s, p) => s + p.valorContratado, 0);
@@ -77,6 +91,29 @@ export default function Dashboard() {
             : <div className="pt-4"><Gantt projetos={[...ativos].sort((a, b) => a.fim.localeCompare(b.fim))} /></div>}
         </CardContent>
       </Card>
+
+      {andamentoObras.length > 0 && (
+        <Card className="mt-4">
+          <CardHeader className="flex-row items-center justify-between"><div><CardTitle>Obras em execução</CardTitle><CardDescription className="mt-1">Avanço físico planejado × realizado, ponderado pelo orçamento ou pela duração.</CardDescription></div>
+            <Link href="/gestao/" className="text-sm font-medium text-primary underline-offset-2 hover:underline">Gestão de obras</Link></CardHeader>
+          <CardContent className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">
+            {andamentoObras.map(({ obra, n, planejado, realizado }) => {
+              const desvio = realizado - planejado;
+              return (
+                <div key={obra.id}>
+                  <div className="flex items-baseline justify-between gap-2"><p className="truncate text-sm font-medium">{String(obra.name)}</p>
+                    <span className={desvio < -2 ? 'tabular shrink-0 text-xs font-medium text-destructive' : 'tabular shrink-0 text-xs text-muted-foreground'}>{n === 0 ? 'sem cronograma' : `${desvio > 0 ? '+' : ''}${num(desvio, 1)} p.p.${desvio < -2 ? ' · atrasada' : ''}`}</span></div>
+                  {n > 0 && ([['Planejado', planejado, 'color-mix(in srgb, var(--series-1) 35%, transparent)'], ['Realizado', realizado, 'var(--series-1)']] as const).map(([r, v, cor]) => (
+                    <div key={r} className="mt-1.5 flex items-center gap-2 text-[11px]"><span className="w-16 text-muted-foreground">{r}</span>
+                      <div className="h-2 flex-1 rounded-full bg-secondary" role="progressbar" aria-label={`${r} — ${String(obra.name)}`} aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full" style={{ width: `${Math.min(100, v)}%`, background: cor }} /></div>
+                      <span className="tabular w-12 text-right">{num(v, 1)}%</span></div>
+                  ))}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {!cliente && <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
