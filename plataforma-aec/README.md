@@ -85,6 +85,7 @@ plataforma-aec/
 │  │  ├─ cad/dxf-qto.ts        parser DXF + quantitativos por camada
 │  │  ├─ cad/civil3d.ts        volumes de corte/aterro (CSV e LandXML)
 │  │  ├─ import/               importador universal: ifc, redes (.inp), landxml, tabelas, exemplos
+│  │  ├─ obratop/              esquemas.ts (15 módulos) · vendor/ (cálculos originais do ObraTop)
 │  │  ├─ composicoes/          motor.ts (Quantifik), tabelas.ts, fonte.ts (SINAPI e ORSE analíticos)
 │  │  ├─ orcamento/            analitico.ts (vínculos, busca, cálculo) · bases.ts (catálogo de preços)
 │  │  ├─ urbanismo/quadro.ts   quadro de áreas de loteamento
@@ -94,7 +95,7 @@ plataforma-aec/
 │  │  └─ rbac.ts · format.ts · demo-data.ts · firebase/client.ts
 │  ├─ hooks/                   use-auth (claims), use-colecao (onSnapshot), use-workspace
 │  ├─ components/              ui/ · layout/ · dashboard/ · budget/ · cad/ · contracts/
-│  └─ app/(app)/               dashboard · briefing · cad · quantitativos · composicoes · orcamento · contratos
+│  └─ app/(app)/               dashboard · briefing · cad · quantitativos · composicoes · orcamento · contratos · gestao
 ├─ tests/core.test.ts · tests/importacao.test.ts · tests/rules/firestore.rules.test.ts
 └─ data/cub-modelo.csv
 ```
@@ -111,6 +112,8 @@ tenants/{tenantId}                         razão social, CNPJ, branding, RT (CR
  ├─ members/{uid}                          nome, email, role, projectIds          (escrita: função definirPapel)
  ├─ clients/{clientId}
  ├─ cubOverrides/{UF}_{AAAA-MM}            ajustes do tenant sobre o CUB oficial   (auditado)
+ ├─ works, activities, measurements, budgets, finance, contracts, orders, inventory, suppliers,
+ │  dailyLogs, quality, safety, staff, equipment, documents     módulos de obra (campos do ObraTop)
  ├─ cotacoes/{id}                          numero, cliente, obra, bdi, itens[] (serviço, quantidade, medidas)
  ├─ config/composicoes                     BDI, regime, horas, encargos, pisos, preços digitados
  ├─ vinculos/{id}                          chave do item, fonte, codigo, fator, estado=confirmado
@@ -178,6 +181,32 @@ os projetos. Números da descrição (DN, espessura, fck) são obrigatórios na 
 
 **Tempo real.** A tela assina `quantities` e `vinculos` com `onSnapshot`: uma nova revisão enviada
 (pela tela, pelo `sync-cad.ps1` ou por um colega) recalcula o orçamento de todos na hora.
+
+## Gestão de obras (ObraTop integrado)
+
+Tela `/gestao`. Traz os 15 módulos do ObraTop 3.39.13.0: obras, medições, diário de obra,
+equipamentos, orçamentos, cronograma, fornecedores, compras, estoque, financeiro, contratos,
+qualidade, segurança, pessoal e documentos.
+
+- **Guiado por esquema.** `src/lib/obratop/esquemas.ts` é a cópia literal do `schemas` do
+  ObraTop; uma única tela desenha tabela, filtros e formulário de cada módulo a partir dele.
+- **Cálculos originais.** `src/lib/obratop/vendor/` contém os módulos puros do ObraTop sem
+  nenhuma alteração (`calc`, `msproject`, `orcamento`, `economics`, `bases`). Medição líquida,
+  saldo de contrato, avanço ponderado, valor agregado (IDP/IDC), fluxo de caixa projetado,
+  caminho crítico e leitura/escrita do XML do MS Project vêm deles. `npm run test:obratop`
+  roda os testes do próprio ObraTop contra essas cópias.
+- **Mesmos dados.** Os registros ficam em `tenants/{t}/{coleção}` com os mesmos nomes de coleção
+  e de campo do ObraTop (`organizations/{org}/{coleção}`), inclusive a exclusão lógica (`deleted`).
+- **Migração.** `scripts/migrar-obratop.mjs` copia uma organização do ObraTop para um tenant,
+  preservando ids e referências. Sem `--gravar` é só simulação; a origem nunca é alterada; nada
+  é sobrescrito sem `--sobrescrever`; pode ser repetida. `npm run test:migracao` testa no emulador.
+
+Ainda não trazido do ObraTop: convites e membros (a plataforma usa papéis próprios), restrição
+de usuário por obra, pontos de restauração, linha de base do cronograma, geração de cronograma a
+partir do orçamento, orçamento com composições próprias (`orcamento-ui`), análise econômica
+(`economics-ui`), modelos de obra, envio de arquivo em Documentos, relatórios em PDF, manual
+e a interface própria para celular. "Obras" (execução) e "projetos" (escritório de projeto) são
+cadastros separados, ainda sem vínculo entre si.
 
 ## Serviços & Cotações (Quantifik integrado)
 

@@ -45,6 +45,21 @@ service cloud.firestore {
         allow write: if socio(tenantId);
       }
 
+      // Gestão de obras (módulos herdados do ObraTop): mesmas coleções e campos do aplicativo original.
+      // O filtro pelo nome da coleção impede que esta regra genérica alcance qualquer outra coleção.
+      match /{colecao}/{id} {
+        function moduloObra() {
+          return colecao in ['works', 'measurements', 'budgets', 'activities', 'dailyLogs', 'orders', 'inventory',
+            'finance', 'quality', 'contracts', 'staff', 'equipment', 'safety', 'documents'];
+        }
+        function moduloRestrito() { return colecao in ['suppliers']; } // no ObraTop: só o proprietário
+        allow read: if (moduloObra() || moduloRestrito()) && equipe(tenantId);
+        allow create, update: if request.resource.data.tenantId == tenantId
+          && ((moduloObra() && equipe(tenantId)) || (moduloRestrito() && gestor(tenantId)));
+        // A exclusão comum é lógica (campo `deleted`); apagar de verdade é só do Sócio-Diretor.
+        allow delete: if (moduloObra() || moduloRestrito()) && socio(tenantId);
+      }
+
       // Cotações por cliente (serviços + medidas) e parâmetros de preço do escritório.
       match /cotacoes/{id} {
         allow read: if equipe(tenantId);

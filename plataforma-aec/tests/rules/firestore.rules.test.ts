@@ -174,3 +174,33 @@ describe('cotações e parâmetros de preço', () => {
     await assertSucceeds(deleteDoc(doc(orc, 'tenants/A/cotacoes/c1')));
   });
 });
+
+describe('gestão de obras (módulos do ObraTop)', () => {
+  const obra = { tenantId: 'A', name: 'Obra 1', status: 'Em andamento', deleted: false };
+  it('equipe lê e grava; fornecedores só gestores; apagar de verdade só o sócio', async () => {
+    const proj = como('proj1', 'A', 'projetista');
+    await assertSucceeds(setDoc(doc(proj, 'tenants/A/works/w1'), obra));
+    await assertSucceeds(setDoc(doc(proj, 'tenants/A/finance/f1'), { tenantId: 'A', value: 10 }));
+    await assertSucceeds(updateDoc(doc(proj, 'tenants/A/works/w1'), { deleted: true })); // exclusão lógica
+    await assertFails(deleteDoc(doc(proj, 'tenants/A/works/w1')));
+    await assertFails(setDoc(doc(proj, 'tenants/A/suppliers/s1'), { tenantId: 'A', name: 'F' }));
+    await assertSucceeds(setDoc(doc(como('co1', 'A', 'coordenador'), 'tenants/A/suppliers/s1'), { tenantId: 'A', name: 'F' }));
+    await assertSucceeds(getDoc(doc(proj, 'tenants/A/suppliers/s1')));
+    await assertSucceeds(deleteDoc(doc(como('s1', 'A', 'socio_diretor'), 'tenants/A/works/w1')));
+  });
+  it('outro tenant e cliente não acessam; tenantId não pode ser trocado', async () => {
+    const co = como('co1', 'A', 'coordenador');
+    await assertSucceeds(setDoc(doc(co, 'tenants/A/measurements/m1'), { tenantId: 'A', value: 1 }));
+    await assertFails(getDoc(doc(como('uB', 'B', 'socio_diretor'), 'tenants/A/measurements/m1')));
+    await assertFails(setDoc(doc(como('uB', 'B', 'socio_diretor'), 'tenants/A/measurements/m2'), { tenantId: 'A', value: 1 }));
+    await assertFails(getDoc(doc(como('cli1', 'A', 'cliente'), 'tenants/A/measurements/m1')));
+    await assertFails(setDoc(doc(co, 'tenants/A/measurements/m3'), { tenantId: 'B', value: 1 }));
+  });
+  it('a regra genérica não abre coleções fora da lista', async () => {
+    const socio = como('s1', 'A', 'socio_diretor');
+    await assertFails(setDoc(doc(socio, 'tenants/A/members/intruso'), { tenantId: 'A', role: 'socio_diretor' }));
+    await assertFails(setDoc(doc(socio, 'tenants/A/auditLogs/x'), { tenantId: 'A' }));
+    await assertFails(setDoc(doc(socio, 'tenants/A/qualquerCoisa/x'), { tenantId: 'A' }));
+    await assertFails(getDoc(doc(como('proj1', 'A', 'projetista'), 'tenants/A/auditLogs/l1')));
+  });
+});

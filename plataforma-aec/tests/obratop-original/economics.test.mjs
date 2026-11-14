@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {analyze,adjustment,numeric,isoDate} from '../../src/lib/obratop/vendor/economics.mjs';
+const work={id:'a',name:'Obra A',value:1000,economics:{remainingCost:400,initialCash:100}},date='2026-09-15';
+const finance=[{id:'f1',workId:'a',type:'Despesa',status:'Pago',date:'2026-07-01',paymentDate:'2026-07-10',value:200,category:'Material'},{id:'f2',workId:'a',type:'Receita',status:'Recebido',date:'2026-09-01',paymentDate:'2026-09-05',value:500},{id:'f3',workId:'a',type:'Despesa',status:'Pendente',date:'2026-09-01',dueDate:'2026-09-10',value:100,category:'Equipe'},{id:'f4',workId:'b',type:'Despesa',status:'Pago',date:'2026-07-01',paymentDate:'2026-07-10',value:9999},{id:'f5',workId:'a',deleted:true,type:'Despesa',status:'Pago',date:'2026-07-01',value:9999}];
+const data={finance,budgets:[{id:'b1',workId:'a',qty:10,unitValue:50,bdi:20}],measurements:[{id:'m',workId:'a',value:500,date:'2026-09-01',status:'Paga'}]};
+const r=analyze(work,data,date);
+assert.equal(r.incurred,300);assert.equal(r.budget,500);assert.equal(r.sale,600);assert.equal(r.eac,700);assert.equal(r.margin,300);assert.equal(r.received,500);assert.equal(r.paid,200);assert.equal(r.net,300);assert.equal(r.overduePay,100);assert.equal(r.funding,100);assert.equal(r.rows.length,3);assert.equal(r.rows[1].cost,0);assert.equal(r.mean,100);assert.equal(r.sd,100);assert.equal(r.categories[0].class,'A');assert.equal(r.measured,500);
+assert.equal(analyze(work,{finance:[...finance,{id:'o',workId:'a',type:'Despesa',status:'Previsto',date:'2026-09-01',dueDate:'2026-10-01',value:700}]},date).incurred,300);
+assert.equal(analyze(work,{finance:[{workId:'a',type:'Despesa',status:'Pago',date:'2026-09-01',value:100}]},date).paid,0);
+assert.equal(analyze({id:'a'}, {}, date).budget,null);assert.equal(analyze({id:'a'}, {}, date).eac,null);assert.equal(analyze({id:'a'}, {}, date).funding,null);
+assert.equal(analyze(work,{budgets:[{workId:'a',qty:'bad',unitValue:2,bdi:0}]},date).budget,null);
+assert.equal(analyze(work,{finance:[{workId:'a',value:100,date:'2026-09-01',type:'Despesa',status:'Recebido'}]},date).counts.validFinance,0);
+assert.equal(adjustment({baseIndex:0,currentIndex:10,eligibleAmount:100}).value,null);
+const p={baseIndex:100,currentIndex:110,eligibleAmount:200,indexName:'IPCA',indexSource:'Documento',baseDate:'2025-09-01',indexDate:'2026-09-01'};assert.ok(Math.abs(adjustment(p).value-20)<1e-10);assert.ok(adjustment({...p,currentIndex:90}).value<0);
+assert.equal(numeric(''),null);assert.equal(numeric(Infinity),null);assert.equal(isoDate('2026-02-30'),false);
+assert.throws(()=>analyze(work,data,'inválido'));
+console.log('25 verificações de cálculos e validação concluídas.');

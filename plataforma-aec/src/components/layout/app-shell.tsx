@@ -3,7 +3,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bell, Boxes, Building2, Calculator, Hammer, ClipboardList, FileSignature, LayoutDashboard, LogOut, Moon, PenTool, Sun } from 'lucide-react';
+import { Bell, Boxes, Building2, Calculator, Hammer, HardHat, ClipboardList, FileSignature, LayoutDashboard, LogOut, Moon, PenTool, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
@@ -20,6 +20,7 @@ const NAV = [
   { href: '/composicoes/', label: 'Serviços & Cotações', icon: Hammer },
   { href: '/orcamento/', label: 'Orçamento CUB', icon: Calculator },
   { href: '/contratos/', label: 'Contratos & PDF', icon: FileSignature },
+  { href: '/gestao/', label: 'Gestão de obras', icon: HardHat },
 ];
 
 function Notificacoes() {

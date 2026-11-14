@@ -95,3 +95,43 @@ for (const [x, y] of [[3, 0], [9, 0], [3, 9], [9, 9], [0, 2], [0, 7]] as [number
 txt(2.2, 6.6, 'ESTAR / JANTAR'); txt(8.3, 6.6, 'SUITE'); txt(2.4, 2, 'COZINHA'); txt(8.4, 0.9, 'BANHO'); txt(13.6, 2.8, 'GARAGEM'); txt(4.2, 10.1, 'VARANDA'); txt(15.9, 9.4, 'PISCINA');
 L.push(0, 'ENDSEC', 0, 'EOF');
 export const DEMO_DXF = L.join('\n') + '\n';
+
+// ── Gestão de obras (mesmos campos do ObraTop) ─────────────────────────────
+type Reg = { id: string } & Record<string, unknown>;
+export const DEMO_OBRA: Record<string, Reg[]> = {
+  works: [
+    { id: 'w1', name: 'Residencial Jardim das Acácias', client: 'Cliente A', address: 'Salvador/BA', start: iso(-60), end: iso(120), value: 1850000, status: 'Em andamento', progress: 32, engineer: 'Eng. Responsável Demo' },
+    { id: 'w2', name: 'Pavimentação Rua das Palmeiras', client: 'Cliente D', address: 'Camaçari/BA', start: iso(-20), end: iso(70), value: 640000, status: 'Em andamento', progress: 18, engineer: 'Eng. Responsável Demo' },
+  ],
+  activities: [
+    { id: 'at1', workId: 'w1', wbs: '1.1', name: 'Serviços preliminares e canteiro', start: iso(-60), end: iso(-46), durationDays: 11, progressMode: 'Percentual', progress: 100, predecessors: '', status: 'Concluída', responsible: 'Mestre A' },
+    { id: 'at2', workId: 'w1', wbs: '1.2', name: 'Fundações', start: iso(-45), end: iso(-18), durationDays: 20, progressMode: 'Percentual', progress: 100, predecessors: '1.1', status: 'Concluída', responsible: 'Mestre A' },
+    { id: 'at3', workId: 'w1', wbs: '2.1', name: 'Estrutura — pavimento térreo', start: iso(-17), end: iso(12), durationDays: 21, progressMode: 'Percentual', progress: 55, predecessors: '1.2', status: 'Em andamento', responsible: 'Mestre B' },
+    { id: 'at4', workId: 'w1', wbs: '2.2', name: 'Estrutura — pavimento superior', start: iso(13), end: iso(44), durationDays: 23, progressMode: 'Percentual', progress: 0, predecessors: '2.1', status: 'Não iniciada', responsible: 'Mestre B' },
+    { id: 'at5', workId: 'w1', wbs: '3.1', name: 'Alvenaria de vedação', start: iso(20), end: iso(70), durationDays: 37, progressMode: 'Percentual', progress: 0, predecessors: '2.1SS+10d', status: 'Não iniciada', responsible: 'Mestre C' },
+    { id: 'at6', workId: 'w1', wbs: '3.2', name: 'Instalações elétricas e hidráulicas', start: iso(45), end: iso(95), durationDays: 37, progressMode: 'Percentual', progress: 0, predecessors: '2.2', status: 'Não iniciada', responsible: 'Equipe D' },
+    { id: 'at7', workId: 'w1', wbs: '4.1', name: 'Revestimentos e acabamentos', start: iso(71), end: iso(120), durationDays: 36, progressMode: 'Percentual', progress: 0, predecessors: '3.1;3.2FF', status: 'Não iniciada', responsible: 'Mestre C' },
+    { id: 'at8', workId: 'w2', wbs: '1.1', name: 'Terraplenagem e regularização do subleito', start: iso(-20), end: iso(5), durationDays: 18, progressMode: 'Quantidade', progress: 60, plannedQty: 4200, actualQty: 2520, unit: 'm²', predecessors: '', status: 'Em andamento', responsible: 'Encarregado E' },
+    { id: 'at9', workId: 'w2', wbs: '1.2', name: 'Base e sub-base', start: iso(6), end: iso(35), durationDays: 22, progressMode: 'Percentual', progress: 0, predecessors: '1.1', status: 'Não iniciada', responsible: 'Encarregado E' },
+    { id: 'at10', workId: 'w2', wbs: '1.3', name: 'Revestimento asfáltico e sinalização', start: iso(36), end: iso(70), durationDays: 25, progressMode: 'Percentual', progress: 0, predecessors: '1.2', status: 'Não iniciada', responsible: 'Encarregado E' },
+  ],
+  budgets: [
+    { id: 'b1', workId: 'w1', category: 'Estrutura', description: 'Concreto, fôrmas e armação', unit: 'vb', qty: 1, unitValue: 520000, bdi: 25 },
+    { id: 'b2', workId: 'w1', category: 'Vedações', description: 'Alvenaria de vedação', unit: 'm²', qty: 1450, unitValue: 92, bdi: 25 },
+    { id: 'b3', workId: 'w2', category: 'Pavimentação', description: 'Base, sub-base e CBUQ', unit: 'm²', qty: 4200, unitValue: 98, bdi: 22 },
+  ],
+  contracts: [{ id: 'k1', workId: 'w1', number: 'CT-012/2026', party: 'Cliente A', object: 'Construção do residencial', start: iso(-60), end: iso(120), value: 1850000, addendum: 45000, addendumNote: 'Acréscimo de muro de arrimo', status: 'Ativo' }],
+  measurements: [
+    { id: 'm1', workId: 'w1', date: iso(-30), number: '001', description: '1ª medição — serviços preliminares e fundações', physical: 14, value: 262000, contractId: 'k1', retention: 5, deduction: 0, status: 'Paga' },
+    { id: 'm2', workId: 'w1', date: iso(-2), number: '002', description: '2ª medição — estrutura do térreo', physical: 12, value: 228000, contractId: 'k1', retention: 5, deduction: 3500, status: 'Aprovada' },
+  ],
+  finance: [
+    { id: 'f1', workId: 'w1', date: iso(-28), dueDate: iso(-20), paymentDate: iso(-20), description: 'Recebimento da 1ª medição', type: 'Receita', category: 'Medição', value: 248900, status: 'Recebido', measurementId: 'm1' },
+    { id: 'f2', workId: 'w1', date: iso(-25), dueDate: iso(-15), paymentDate: iso(-15), description: 'Concreto usinado — fundações', type: 'Despesa', category: 'Materiais', value: 96500, status: 'Pago' },
+    { id: 'f3', workId: 'w1', date: iso(-10), dueDate: iso(5), description: 'Aço CA-50', type: 'Despesa', category: 'Materiais', value: 74200, status: 'Pendente' },
+    { id: 'f4', workId: 'w1', date: iso(-5), dueDate: iso(10), description: 'Folha de pagamento da obra', type: 'Despesa', category: 'Mão de obra', value: 58000, status: 'Pendente' },
+    { id: 'f5', workId: 'w1', date: iso(-2), dueDate: iso(18), description: 'Recebimento da 2ª medição', type: 'Receita', category: 'Medição', value: 213100, status: 'Previsto', measurementId: 'm2' },
+  ],
+  inventory: [{ id: 'i1', workId: 'w1', date: iso(0), material: 'Cimento CP II-32', category: 'Aglomerantes', unit: 'sc', currentStock: 40, minStock: 60, maxStock: 300, safetyStock: 30, avgDailyConsumption: 12, leadTimeDays: 3, unitValue: 38 }],
+  suppliers: [{ id: 's1', name: 'Fornecedor Demo Ltda.', cnpj: '00.000.000/0001-00', category: 'Materiais básicos', status: 'Ativo' }],
+};

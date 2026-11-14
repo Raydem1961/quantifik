@@ -7,7 +7,7 @@
 import * as React from 'react';
 import { addDoc, collection, collectionGroup, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where, type DocumentData } from 'firebase/firestore';
 import { db, MODO_DEMO } from '@/lib/firebase/client';
-import { DEMO_ART, DEMO_FILES, DEMO_NOTIFICATIONS, DEMO_PROJECTS, DEMO_TIMESHEETS } from '@/lib/demo-data';
+import { DEMO_ART, DEMO_FILES, DEMO_NOTIFICATIONS, DEMO_OBRA, DEMO_PROJECTS, DEMO_TIMESHEETS } from '@/lib/demo-data';
 import { useAuth } from './use-auth';
 
 type Item = { id: string } & Record<string, unknown>;
@@ -19,12 +19,19 @@ const memoria = new Map<string, Item[]>([
   ['timesheets', DEMO_TIMESHEETS as unknown as Item[]],
   ['notifications', DEMO_NOTIFICATIONS as unknown as Item[]],
   ['files', DEMO_FILES as unknown as Item[]],
+  ...Object.entries(DEMO_OBRA).map(([k, v]) => [k, v as Item[]] as [string, Item[]]),
 ]);
 const ouvintes = new Set<() => void>();
 const avisar = () => ouvintes.forEach((f) => f());
 const VAZIO: Item[] = [];
 /** Subcoleções de projeto viram uma lista plana no demo: 'projects/p1/timesheets' → 'timesheets'. */
-const chaveDemo = (caminho: string) => caminho.split('/').filter((_, i, a) => i === a.length - 1 || a.length === 1).join('/');
+const chaveDemo = (caminho: string) => {
+  const partes = caminho.split('/');
+  const ultima = partes[partes.length - 1]!;
+  // Orçamentos e contratos de PROJETO não se misturam com os módulos de obra de mesmo nome.
+  if (partes.length > 1 && (ultima === 'budgets' || ultima === 'contracts')) return caminho;
+  return ultima;
+};
 
 export interface OpcoesColecao {
   /** Consulta collectionGroup filtrada por tenantId (ex.: 'artRrt' de todos os projetos). */
