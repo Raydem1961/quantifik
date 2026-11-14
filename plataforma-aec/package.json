@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/gerar-sw.mjs",
     "start": "npx serve out",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -18,7 +18,10 @@
     "test:obratop": "node --test tests/obratop-original/calc.test.mjs tests/obratop-original/msproject.test.mjs tests/obratop-original/orcamento.test.mjs && node tests/obratop-original/economics.test.mjs",
     "test:migracao": "firebase emulators:exec --only firestore --project demo-aec \"node tests/e2e/migracao.e2e.mjs\"",
     "test:empresa": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/empresa.e2e.mjs\"",
-    "empresa:criar": "node scripts/criar-empresa.mjs"
+    "empresa:criar": "node scripts/criar-empresa.mjs",
+    "regras:mesclar": "node scripts/mesclar-regras.mjs",
+    "test:e2e:offline": "node tests/e2e/offline.e2e.cjs",
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",

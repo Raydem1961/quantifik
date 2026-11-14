@@ -276,7 +276,7 @@ export default function Quantitativos() {
                   <thead><tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-2 font-medium">Item</th><th className="px-2 py-2 text-right font-medium">Quantidade</th>
                     <th className="px-2 py-2 font-medium">Composição</th><th className="px-2 py-2 text-right font-medium">Preço unit.</th>
-                    <th className="px-2 py-2 text-right font-medium">Total</th><th className="w-24 py-2" />
+                    <th className="px-2 py-2 text-right font-medium">Total</th><th className="w-24 py-2"><span className="sr-only">Ações</span></th>
                   </tr></thead>
                   {grupos.map(([disciplina, linhas]) => (
                     <tbody key={disciplina} className="divide-y">

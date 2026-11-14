@@ -38,7 +38,7 @@ export function GanttObra({ atividades, linhaBase, onAbrir }: { atividades: Ativ
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: 'color-mix(in srgb, var(--series-1) 30%, transparent)' }} />planejado</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: 'var(--series-1)' }} />executado</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm border-2 border-destructive" />caminho crítico ({nCriticas})</span>
@@ -48,7 +48,7 @@ export function GanttObra({ atividades, linhaBase, onAbrir }: { atividades: Ativ
       <div className="grid grid-cols-[minmax(150px,280px)_1fr] gap-x-3 text-xs">
         <div />
         <div className="relative h-5 border-b">
-          {meses.map((m, i) => i % passo === 0 && <span key={i} className="absolute text-[10px] text-muted-foreground" style={{ left: `${m.pos}%` }}>{m.rotulo}</span>)}
+          {meses.map((m, i) => i % passo === 0 && <span key={i} className="absolute text-xs text-muted-foreground" style={{ left: `${m.pos}%` }}>{m.rotulo}</span>)}
         </div>
         {validas.map((a) => {
           const ini = x(t(a.start));

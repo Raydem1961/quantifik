@@ -1,0 +1,16 @@
+{
+  "name": "Plataforma AEC — Projetos, Obras e Orçamento",
+  "short_name": "Plataforma AEC",
+  "description": "Gestão de projetos e obras, CAD/BIM, orçamento, cotações e contratos.",
+  "lang": "pt-BR",
+  "start_url": "/dashboard/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111113",
+  "theme_color": "#3b4cca",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

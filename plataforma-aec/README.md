@@ -21,6 +21,29 @@ npm run dev            # http://localhost:3000
 .\scripts\setup-deploy.ps1 -ProjectId <id-do-projeto-firebase>
 ```
 
+### Publicar sem derrubar outro aplicativo
+
+Um projeto Firebase tem **um** arquivo de regras do Firestore, **um** do Storage e, por site de
+Hosting, **um** aplicativo. Publicar a plataforma "por cima" de um projeto que já tem outro
+aplicativo (como o ObraTop em `obratop-v3-teste`) apagaria as regras e o site dele. Por isso a
+publicação exige dizer em que situação o projeto está:
+
+```bash
+# projeto só da plataforma (recomendado)
+node scripts/deploy.mjs --projeto meu-projeto --projeto-novo
+
+# projeto que já tem o ObraTop: regras mescladas + site de Hosting próprio
+node scripts/deploy.mjs --projeto obratop-v3-teste --compartilhado-com ../ObraTop --site plataforma-aec-xyz
+
+# acrescente --simular para ver os comandos sem executar nada
+```
+
+No Windows, `setup-deploy.ps1` aceita `-ProjetoNovo` ou `-CompartilhadoCom <pasta> -HostingSite <site>`
+e chama esse mesmo script. Em projeto compartilhado as regras dos dois aplicativos são unidas por
+`scripts/mesclar-regras.mjs` (que recusa a mescla se houver função ou caminho repetido), nada é
+publicado com `--force` além das funções da própria plataforma, e o site padrão não é tocado.
+As Cloud Functions e o Storage exigem o plano Blaze do Firebase.
+
 ### Primeira empresa
 
 Pelas regras de segurança, só o backend cria empresas e atribui papéis. Depois do deploy:
@@ -50,6 +73,24 @@ Sem `.env.local` o app sobe em **modo demonstração**; com as variáveis `NEXT_
 | `scripts/import-cub.ps1` | Importa o CUB mensal (CSV) para `cubTables` — `-Simular` só valida |
 | `scripts/sync-cad.ps1` | Monitora a pasta local de CAD e envia cada arquivo salvo |
 | `scripts/backup.ps1` | Exporta o Firestore e sincroniza o Storage para um bucket de backup |
+
+## Uso sem internet
+
+A plataforma é instalável (PWA) e abre offline:
+
+- `scripts/gerar-sw.mjs` roda no fim do build e gera o service worker com a lista de arquivos
+  daquela versão; todas as telas ficam disponíveis sem internet, mesmo as ainda não visitadas.
+- As bases de preços e composições (SINAPI, ORSE) ficam em cache depois do primeiro uso.
+- O Firestore usa cache local persistente: os dados já vistos abrem offline, e o que for lançado
+  sem conexão aparece na hora e sobe sozinho quando ela volta (`npm run test:e2e:offline`).
+- Precisam de internet: entrar pela primeira vez no aparelho, enviar arquivos (CAD, anexos),
+  assinatura de contrato e tudo o que ainda não foi aberto naquele aparelho.
+
+## Qualidade medida
+
+Lighthouse 12 no build de produção (modo demonstração, perfil móvel), nas nove telas:
+acessibilidade 100, boas práticas 100 e SEO 100 em todas; desempenho de 79 a 98
+(as mais pesadas são Gestão de obras e Serviços & Cotações, que carrega 10 mil composições).
 
 ## Testes de ponta a ponta (emuladores)
 

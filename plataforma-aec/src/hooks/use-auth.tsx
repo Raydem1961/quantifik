@@ -36,9 +36,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       // tenantId e papel vêm dos custom claims — a mesma fonte que as regras de segurança usam.
-      const { claims } = await u.getIdTokenResult();
-      const tenantId = (claims.tenantId as string | undefined) ?? null;
-      const role = claims.role as Role | undefined;
+      let tenantId: string | null = null;
+      let role: Role | undefined;
+      const chave = `aec.claims.${u.uid}`;
+      try {
+        const { claims } = await u.getIdTokenResult();
+        tenantId = (claims.tenantId as string | undefined) ?? null;
+        role = claims.role as Role | undefined;
+        try { localStorage.setItem(chave, JSON.stringify({ tenantId, role })); } catch { /* sem armazenamento */ }
+      } catch {
+        // Sem internet e com o token vencido: usa o último papel conhecido só para montar a tela.
+        // O acesso aos dados continua sendo decidido pelo servidor quando a conexão voltar.
+        try { const salvo = JSON.parse(localStorage.getItem(chave) ?? 'null') as { tenantId: string | null; role?: Role } | null; tenantId = salvo?.tenantId ?? null; role = salvo?.role; } catch { /* idem */ }
+      }
       const usuario: Member = { uid: u.uid, nome: u.displayName ?? u.email ?? 'Usuário', email: u.email ?? '', role: role ?? 'cliente', ativo: true };
       if (!tenantId || !role) {
         setEstado({ carregando: false, usuario, tenant: null, tenantId: null, role: undefined, semVinculo: true });

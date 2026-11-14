@@ -288,23 +288,25 @@ export default function Gestao() {
       {msg && <p role={msg.tipo === 'erro' ? 'alert' : 'status'} className={cn('mb-4 rounded-md border p-3 text-sm', msg.tipo === 'erro' ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-success/40 bg-success/5')}>{msg.texto}</p>}
       {erro && <p role="alert" className="mb-4 text-sm text-destructive">Não foi possível carregar {esquema.title.toLowerCase()}: {erro}</p>}
 
+      {/* Altura reservada: os cartões chegam depois dos dados e não podem empurrar a tabela. */}
+      {(modulo === 'works' || modulo === 'activities') && desempenho.length === 0 && carregando && <div className="mb-4 h-[132px]" aria-hidden />}
       {desempenho.length > 0 && (
-        <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="mb-4 grid min-h-[132px] grid-cols-1 gap-3 lg:grid-cols-2">
           {desempenho.map(({ obra, p, n }) => (
             <Card key={obra.id}><CardContent className="p-4">
               <div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-semibold">{String(obra.name)}</p>
-                <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">{n} atividades{(obra.baseline as { revision?: number } | undefined)?.revision ? ` · base rev. ${(obra.baseline as { revision: number }).revision}` : ''}
-                  <Button size="sm" variant="outline" aria-label={`Relatório em PDF de ${String(obra.name)}`} onClick={() => void gerarRelatorio(obra)}><FileText className="h-3.5 w-3.5" />Relatório PDF</Button></span></div>
+                <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">{n} atividades{(obra.baseline as { revision?: number } | undefined)?.revision ? ` · base rev. ${(obra.baseline as { revision: number }).revision}` : ''}
+                  <Button size="sm" variant="outline" aria-label={`Relatório PDF — ${String(obra.name)}`} onClick={() => void gerarRelatorio(obra)}><FileText className="h-3.5 w-3.5" />Relatório PDF</Button></span></div>
               {n === 0 ? <p className="mt-2 text-xs text-muted-foreground">Sem cronograma: cadastre atividades ou importe do MS Project.</p> : (
                 <>
                   <div className="mt-2 space-y-1.5">
                     {([['Planejado', p.planned, 'color-mix(in srgb, var(--series-1) 35%, transparent)'], ['Realizado', p.actual, 'var(--series-1)']] as const).map(([r, v, cor]) => (
-                      <div key={r} className="flex items-center gap-2 text-[11px]"><span className="w-16 text-muted-foreground">{r}</span>
+                      <div key={r} className="flex items-center gap-2 text-xs"><span className="w-16 text-muted-foreground">{r}</span>
                         <div className="h-2 flex-1 rounded-full bg-secondary"><div className="h-full rounded-full" style={{ width: `${Math.min(100, v)}%`, background: cor }} /></div>
                         <span className="tabular w-12 text-right">{num(v, 1)}%</span></div>
                     ))}
                   </div>
-                  <dl className="tabular mt-3 grid grid-cols-4 gap-2 text-[11px]">
+                  <dl className="tabular mt-3 grid grid-cols-4 gap-2 text-xs">
                     <div><dt className="text-muted-foreground">Desvio</dt><dd className={cn('font-medium', p.variance < -2 && 'text-destructive')}>{p.variance > 0 ? '+' : ''}{num(p.variance, 1)} p.p.</dd></div>
                     <div><dt className="text-muted-foreground">IDP (prazo)</dt><dd className={cn('font-medium', p.spi < 0.95 && 'text-destructive')}>{Number.isFinite(p.spi) ? num(p.spi, 2) : '—'}</dd></div>
                     <div><dt className="text-muted-foreground">IDC (custo)</dt><dd className={cn('font-medium', p.cpi < 0.95 && 'text-destructive')}>{Number.isFinite(p.cpi) ? num(p.cpi, 2) : '—'}</dd></div>
@@ -318,7 +320,7 @@ export default function Gestao() {
       )}
       {indicadores.length > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {indicadores.map(([r, v, d]) => <Card key={r}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{r}</p><p className="tabular mt-1 text-lg font-semibold">{v}</p>{d && <p className="text-[11px] text-muted-foreground">{d}</p>}</CardContent></Card>)}
+          {indicadores.map(([r, v, d]) => <Card key={r}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{r}</p><p className="tabular mt-1 text-lg font-semibold">{v}</p>{d && <p className="text-xs text-muted-foreground">{d}</p>}</CardContent></Card>)}
         </div>
       )}
 
@@ -355,7 +357,7 @@ export default function Gestao() {
                     {modulo === 'contracts' && <th className="px-2 py-2 text-right font-medium">Saldo a medir</th>}
                     {modulo === 'budgets' && <th className="px-2 py-2 text-right font-medium">Preço de venda</th>}
                     {modulo === 'documents' && <th className="px-2 py-2 font-medium">Arquivo</th>}
-                    <th className="w-20" />
+                    <th className="w-20"><span className="sr-only">Ações</span></th>
                   </tr></thead>
                   <tbody className="divide-y">
                     {registros.map((r) => (
@@ -441,7 +443,7 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
                     {(referencias[col] ?? []).filter((r) => col === 'works' || !v.workId || !r.workId || r.workId === v.workId).map((r) => <option key={r.id} value={r.id}>{rotuloRegistro(col, r)}</option>)}</Select>
                   : tipo === 'textarea' ? <Textarea className="min-h-[70px]" {...comum} />
                   : <Input type={tipo === 'date' ? 'date' : tipo === 'number' ? 'text' : tipo === 'email' ? 'email' : tipo === 'url' ? 'url' : 'text'} inputMode={tipo === 'number' ? 'decimal' : undefined} className={tipo === 'number' ? 'tabular' : ''} {...comum} />}
-                {erros[chave] && <span role="alert" className="text-[11px] text-destructive">{erros[chave]}</span>}
+                {erros[chave] && <span role="alert" className="text-xs text-destructive">{erros[chave]}</span>}
               </Field>
             );
           })}

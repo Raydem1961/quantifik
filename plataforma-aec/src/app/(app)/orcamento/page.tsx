@@ -173,7 +173,7 @@ export default function Orcamento() {
                   <thead><tr className="text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-2 font-medium">Descrição</th><th className="pb-2 pr-2 font-medium">Tipo (NBR 12721)</th>
                     <th className="pb-2 pr-2 text-right font-medium">Área real (m²)</th><th className="pb-2 pr-2 text-right font-medium">Coef.</th>
-                    <th className="pb-2 pr-2 text-right font-medium">Equivalente</th><th />
+                    <th className="pb-2 pr-2 text-right font-medium">Equivalente</th><th><span className="sr-only">Ações</span></th>
                   </tr></thead>
                   <tbody>
                     {areas.map((a, i) => {

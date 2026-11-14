@@ -94,10 +94,15 @@ CATEGORIA_LABEL.out = 'Outros e parâmetros';
 CATEGORIA_ORDEM.push('out');
 
 /** Atividade (categoria) de uma composição, pelo grupo da base ou, na falta, pela descrição. */
+const cacheCategoria = new WeakMap<object, string>();
 export function categoriaDe(c: Pick<Composicao, 'grupo' | 'descricao'>): string {
+  const salvo = cacheCategoria.get(c);
+  if (salvo) return salvo;
   const t = norm(c.grupo ? c.grupo : c.descricao);
-  for (const [id, , re] of CATS) if (re.test(t)) return id;
-  return 'out';
+  let id = 'out';
+  for (const [k, , re] of CATS) if (re.test(t)) { id = k; break; }
+  cacheCategoria.set(c, id);
+  return id;
 }
 
 /** Classifica um insumo quando a base não informa o tipo (por unidade e pelo nome). */
@@ -479,6 +484,8 @@ export function proximoNumero(existentes: Pick<Cotacao, 'numero'>[], ano: number
   return `${String(maior + 1).padStart(3, '0')}/${ano}`;
 }
 
+const cacheBusca = new WeakMap<Composicao, string>();
+
 /** Busca de serviços: todos os termos precisam aparecer no código, descrição ou grupo. */
 export function buscarServicos(base: BaseComposicoes, consulta: string, categoria?: string, limite = 60): Composicao[] {
   const termos = norm(consulta).split(/\s+/).filter(Boolean);
@@ -486,7 +493,8 @@ export function buscarServicos(base: BaseComposicoes, consulta: string, categori
   for (const c of base.comps) {
     if (categoria && categoriaDe(c) !== categoria) continue;
     if (termos.length) {
-      const alvo = norm(`${c.codigo} ${c.descricao} ${c.grupo}`);
+      let alvo = cacheBusca.get(c);
+      if (alvo === undefined) { alvo = norm(`${c.codigo} ${c.descricao} ${c.grupo}`); cacheBusca.set(c, alvo); }
       if (!termos.every((t) => alvo.includes(t))) continue;
     }
     out.push(c);

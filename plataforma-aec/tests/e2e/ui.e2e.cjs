@@ -247,7 +247,7 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     await p.getByRole('button', { name: /Replanejar/ }).click();
     const obra2 = await ate(async () => { const d = (await obra.ref.get()).data(); return d.baseline?.revision === 2 ? d : null; });
     checar('replanejamento guarda a base anterior no histórico', obra2?.baselineHistory?.[0]?.revision === 1 && obra2?.baseline?.items?.a2?.e === '2026-05-15');
-    const [rel] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.getByRole('button', { name: /Relatório em PDF de Obra E2E/ }).click()]);
+    const [rel] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.getByRole('button', { name: /Relatório PDF — Obra E2E/ }).click()]);
     checar('relatório da obra em PDF é gerado', /^relatorio-Obra_E2E-.*\.pdf$/.test(rel.suggestedFilename()), rel.suggestedFilename());
     // exclusão lógica
     await p.getByRole('tab', { name: 'Tabela' }).click();

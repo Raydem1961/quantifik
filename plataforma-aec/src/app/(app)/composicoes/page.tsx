@@ -87,10 +87,17 @@ export default function Composicoes() {
   const [medidas, setMedidas] = React.useState<Medidas>({});
   const [expandir, setExpandir] = React.useState(true);
   const resultados = React.useMemo(() => (base ? buscarServicos(base, consulta, categoria || undefined, 80) : []), [base, consulta, categoria]);
-  const contagem = React.useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const c of base?.comps ?? []) { const k = categoriaDe(c); m[k] = (m[k] ?? 0) + 1; }
-    return m;
+  // Classificar 10 mil composições custa algumas centenas de milissegundos: faz depois da
+  // primeira pintura, para a tela aparecer e responder antes.
+  const [contagem, setContagem] = React.useState<Record<string, number>>({});
+  React.useEffect(() => {
+    if (!base) { setContagem({}); return; }
+    const id = setTimeout(() => {
+      const m: Record<string, number> = {};
+      for (const c of base.comps) { const k = categoriaDe(c); m[k] = (m[k] ?? 0) + 1; }
+      setContagem(m);
+    }, 0);
+    return () => clearTimeout(id);
   }, [base]);
   const servico: Composicao | undefined = base?.porCodigo.get(codigo);
   const q = servico ? calcularQuantidade(servico.unidade, medidas) : null;
@@ -231,7 +238,7 @@ export default function Composicoes() {
               </div>
               <Field label="Buscar por código ou descrição"><Input value={consulta} placeholder="ex.: alvenaria bloco cerâmico 14" onChange={(e) => setConsulta(e.target.value)} /></Field>
               {erroBase[idBase] && <p role="alert" className="text-sm text-destructive">{erroBase[idBase]} <button type="button" className="underline" onClick={() => carregar(idBase)}>Tentar de novo</button></p>}
-              <ul className="max-h-[560px] divide-y overflow-y-auto rounded-md border" aria-label="Serviços encontrados">
+              <ul className="h-[560px] divide-y overflow-y-auto rounded-md border" aria-label="Serviços encontrados">
                 {resultados.map((c) => (
                   <li key={c.codigo}>
                     <button type="button" aria-pressed={c.codigo === codigo} onClick={() => setCodigo(c.codigo)} className={cn('w-full px-3 py-2 text-left hover:bg-accent/60', c.codigo === codigo && 'bg-primary/10')}>
@@ -241,6 +248,7 @@ export default function Composicoes() {
                   </li>
                 ))}
                 {base && resultados.length === 0 && <li className="p-4 text-center text-xs text-muted-foreground">Nenhum serviço encontrado. Tente menos termos.</li>}
+                {!base && !erroBase[idBase] && <li className="p-4 text-center text-xs text-muted-foreground">Carregando composições…</li>}
               </ul>
               {resultados.length === 80 && <p className="text-[11px] text-muted-foreground">Mostrando os 80 primeiros — refine a busca para ver outros.</p>}
             </CardContent>

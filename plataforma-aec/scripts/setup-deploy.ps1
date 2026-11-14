@@ -11,7 +11,8 @@
   6. Publica regras, índices, Storage, Functions e Hosting.
 
 .EXAMPLE
-  .\scripts\setup-deploy.ps1 -ProjectId meu-projeto-aec
+  .\scripts\setup-deploy.ps1 -ProjectId meu-projeto-aec -ProjetoNovo
+  .\scripts\setup-deploy.ps1 -ProjectId obratop-v3-teste -CompartilhadoCom ..\ObraTop -HostingSite plataforma-aec
   .\scripts\setup-deploy.ps1 -ProjectId meu-projeto-aec -Alvo regras
   .\scripts\setup-deploy.ps1 -ProjectId meu-projeto-aec -Emuladores
 #>
@@ -21,6 +22,10 @@ param(
   [ValidateSet('tudo', 'hosting', 'functions', 'regras')][string]$Alvo = 'tudo',
   [string]$Regiao = 'southamerica-east1',
   [string]$PastaCad = (Join-Path $HOME 'ProjetosCAD'),
+  # Situação do projeto Firebase — obrigatório informar UMA das duas para publicar:
+  [switch]$ProjetoNovo,                 # o projeto é só da plataforma
+  [string]$CompartilhadoCom = '',       # pasta do aplicativo que já usa o projeto (ex.: a do ObraTop)
+  [string]$HostingSite = '',            # site de Hosting da plataforma (obrigatório em projeto compartilhado)
   [switch]$PularInstalacao,
   [switch]$PularTestes,
   [switch]$Emuladores,
@@ -166,17 +171,18 @@ try {
   }
 
   Write-Etapa "Publicando ($Alvo)"
-  $somente = switch ($Alvo) {
-    'tudo'      { 'firestore:rules,firestore:indexes,storage,functions,hosting' }
-    'hosting'   { 'hosting' }
-    'functions' { 'functions' }
-    'regras'    { 'firestore:rules,firestore:indexes,storage' }
-  }
-  Invoke-Cmd firebase @('deploy', '--project', $ProjectId, '--only', $somente, '--non-interactive', '--force') 'firebase deploy'
+  # A publicação em si é feita pelo scripts/deploy.mjs, que protege aplicativos já publicados no
+  # mesmo projeto: mescla as regras de segurança e usa um site de Hosting próprio.
+  $argsDeploy = @('scripts/deploy.mjs', '--projeto', $ProjectId, '--alvo', $Alvo)
+  if ($ProjetoNovo) { $argsDeploy += '--projeto-novo' }
+  if ($CompartilhadoCom) { $argsDeploy += @('--compartilhado-com', (Resolve-Path $CompartilhadoCom).Path) }
+  if ($HostingSite) { $argsDeploy += @('--site', $HostingSite) }
+  Invoke-Cmd node $argsDeploy 'publicação'
+  $siteFinal = if ($HostingSite) { $HostingSite } else { $ProjectId }
 
   $duracao = [int]((Get-Date) - $inicio).TotalSeconds
   Write-Host "`nDeploy concluído em ${duracao}s." -ForegroundColor Green
-  Write-Host "  App:      https://$ProjectId.web.app"
+  Write-Host "  App:      https://$siteFinal.web.app"
   Write-Host "  Console:  https://console.firebase.google.com/project/$ProjectId/overview"
   if ($Alvo -in 'tudo', 'functions') {
     Write-Host "`nSecrets usadas pelas Functions (defina uma vez):" -ForegroundColor Yellow

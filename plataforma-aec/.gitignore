@@ -15,3 +15,5 @@ next-env.d.ts
 functions/.secret.local
 functions/.env.local
 *-debug.log
+.regras-mescladas/
+.firebase.compartilhado.json

@@ -11,7 +11,7 @@ let env: RulesTestEnvironment;
 const como = (uid: string, tenantId: string, role: string) => env.authenticatedContext(uid, { tenantId, role }).firestore();
 
 beforeAll(async () => {
-  env = await initializeTestEnvironment({ projectId: 'demo-aec', firestore: { rules: readFileSync('firestore.rules', 'utf8') } });
+  env = await initializeTestEnvironment({ projectId: 'demo-aec', firestore: { rules: readFileSync(process.env.REGRAS ?? 'firestore.rules', 'utf8') } });
 });
 afterAll(async () => { await env.cleanup(); });
 
@@ -202,5 +202,29 @@ describe('gestão de obras (módulos do ObraTop)', () => {
     await assertFails(setDoc(doc(socio, 'tenants/A/auditLogs/x'), { tenantId: 'A' }));
     await assertFails(setDoc(doc(socio, 'tenants/A/qualquerCoisa/x'), { tenantId: 'A' }));
     await assertFails(getDoc(doc(como('proj1', 'A', 'projetista'), 'tenants/A/auditLogs/l1')));
+  });
+});
+
+// Só roda contra as regras mescladas (REGRAS=…/firestore.rules gerado por scripts/mesclar-regras.mjs).
+describe.skipIf(!process.env.REGRAS)('projeto compartilhado com o ObraTop (regras mescladas)', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'organizations/org1'), { name: 'Construtora', ownerUid: 'dono' });
+      await setDoc(doc(db, 'organizations/org1/members/dono'), { email: 'dono@x.com', role: 'owner', status: 'active' });
+      await setDoc(doc(db, 'organizations/org1/works/w1'), { name: 'Obra do ObraTop', progress: 0, value: 1 });
+    });
+  });
+  const dono = () => env.authenticatedContext('dono', { email: 'dono@x.com', email_verified: true }).firestore();
+  it('o ObraTop continua funcionando para os membros dele', async () => {
+    await assertSucceeds(getDoc(doc(dono(), 'organizations/org1/works/w1')));
+    await assertSucceeds(getDocs(collection(dono(), 'organizations/org1/works')));
+    await assertFails(getDoc(doc(env.authenticatedContext('estranho', { email: 'e@x.com', email_verified: true }).firestore(), 'organizations/org1/works/w1')));
+  });
+  it('um aplicativo não enxerga os dados do outro', async () => {
+    await assertFails(getDoc(doc(como('s1', 'A', 'socio_diretor'), 'organizations/org1/works/w1')));
+    await assertFails(setDoc(doc(como('s1', 'A', 'socio_diretor'), 'organizations/org1/works/w9'), { name: 'x' }));
+    await assertFails(getDoc(doc(dono(), 'tenants/A/projects/p1')));
+    await assertFails(getDoc(doc(dono(), 'tenants/A')));
   });
 });

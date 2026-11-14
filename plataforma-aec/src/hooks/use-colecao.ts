@@ -5,7 +5,7 @@
  * para que Kanban, timesheet e redlines funcionem sem backend.
  */
 import * as React from 'react';
-import { addDoc, collection, collectionGroup, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where, type DocumentData } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where, type DocumentData } from 'firebase/firestore';
 import { db, MODO_DEMO } from '@/lib/firebase/client';
 import { DEMO_ART, DEMO_FILES, DEMO_NOTIFICATIONS, DEMO_OBRA, DEMO_PROJECTS, DEMO_TIMESHEETS } from '@/lib/demo-data';
 import { useAuth } from './use-auth';
@@ -68,6 +68,20 @@ export function useColecao<T extends { id: string }>(caminho: string | null, opc
   return MODO_DEMO ? { dados: demo as unknown as T[], carregando: false, erro: undefined } : estado;
 }
 
+/**
+ * Sem internet o Firestore grava no cache local na hora, mas a promessa só termina quando o
+ * servidor confirma. Esperar por ela deixaria a tela presa em "Salvando…"; por isso, offline,
+ * a gravação segue em segundo plano e a tela é liberada (o dado já aparece pelo onSnapshot e
+ * sobe sozinho quando a conexão volta).
+ */
+async function concluir(gravacao: Promise<unknown>): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    gravacao.catch((e) => console.error('Gravação pendente recusada pelo servidor ao reconectar:', e));
+    return;
+  }
+  await gravacao;
+}
+
 /** Atualiza campos de um documento do tenant (ex.: 'projects/p1'). */
 export async function atualizarDoc(tenantId: string, caminho: string, patch: DocumentData): Promise<void> {
   if (MODO_DEMO) {
@@ -78,7 +92,7 @@ export async function atualizarDoc(tenantId: string, caminho: string, patch: Doc
     avisar();
     return;
   }
-  await updateDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), patch);
+  await concluir(updateDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), patch));
 }
 
 /** Cria um documento em uma coleção do tenant (ex.: 'projects/p1/timesheets'). */
@@ -91,7 +105,10 @@ export async function adicionarDoc(tenantId: string, caminho: string, dados: Doc
     return id;
   }
   // `tenantId` é gravado no documento: as regras de collectionGroup dependem dele.
-  return (await addDoc(collection(db(), 'tenants', tenantId, ...caminho.split('/')), { ...dados, tenantId })).id;
+  // O id é gerado no cliente para que a criação também funcione sem esperar o servidor.
+  const novo = doc(collection(db(), 'tenants', tenantId, ...caminho.split('/')));
+  await concluir(setDoc(novo, { ...dados, tenantId }));
+  return novo.id;
 }
 
 /** Grava (cria ou substitui) um documento com id conhecido — ex.: 'projects/p1/quantities/planta-dxf'. */
@@ -104,7 +121,7 @@ export async function definirDoc(tenantId: string, caminho: string, dados: Docum
     avisar();
     return;
   }
-  await setDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), { ...dados, tenantId });
+  await concluir(setDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), { ...dados, tenantId }));
 }
 
 export async function removerDoc(tenantId: string, caminho: string): Promise<void> {
@@ -116,5 +133,5 @@ export async function removerDoc(tenantId: string, caminho: string): Promise<voi
     avisar();
     return;
   }
-  await deleteDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')));
+  await concluir(deleteDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/'))));
 }

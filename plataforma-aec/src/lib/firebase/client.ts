@@ -1,7 +1,7 @@
 'use client';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
 import { connectStorageEmulator, getStorage } from 'firebase/storage';
 
@@ -24,6 +24,11 @@ const EMULADORES = process.env.NEXT_PUBLIC_USE_EMULATORS === '1';
 function app(): FirebaseApp {
   if (getApps().length) return getApp();
   const novo = initializeApp(config);
+  // Cache local persistente: os dados já vistos abrem sem internet e o que for lançado offline
+  // fica na fila e sobe sozinho quando a conexão volta. Em navegação privativa (sem IndexedDB)
+  // cai para o cache em memória.
+  try { initializeFirestore(novo, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  catch { /* já inicializado ou IndexedDB indisponível */ }
   if (EMULADORES) {
     connectAuthEmulator(getAuth(novo), 'http://127.0.0.1:9099', { disableWarnings: true });
     connectFirestoreEmulator(getFirestore(novo), '127.0.0.1', 8080);

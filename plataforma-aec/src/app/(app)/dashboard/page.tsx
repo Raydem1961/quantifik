@@ -104,7 +104,7 @@ export default function Dashboard() {
                   <div className="flex items-baseline justify-between gap-2"><p className="truncate text-sm font-medium">{String(obra.name)}</p>
                     <span className={desvio < -2 ? 'tabular shrink-0 text-xs font-medium text-destructive' : 'tabular shrink-0 text-xs text-muted-foreground'}>{n === 0 ? 'sem cronograma' : `${desvio > 0 ? '+' : ''}${num(desvio, 1)} p.p.${desvio < -2 ? ' · atrasada' : ''}`}</span></div>
                   {n > 0 && ([['Planejado', planejado, 'color-mix(in srgb, var(--series-1) 35%, transparent)'], ['Realizado', realizado, 'var(--series-1)']] as const).map(([r, v, cor]) => (
-                    <div key={r} className="mt-1.5 flex items-center gap-2 text-[11px]"><span className="w-16 text-muted-foreground">{r}</span>
+                    <div key={r} className="mt-1.5 flex items-center gap-2 text-xs"><span className="w-16 text-muted-foreground">{r}</span>
                       <div className="h-2 flex-1 rounded-full bg-secondary" role="progressbar" aria-label={`${r} — ${String(obra.name)}`} aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full" style={{ width: `${Math.min(100, v)}%`, background: cor }} /></div>
                       <span className="tabular w-12 text-right">{num(v, 1)}%</span></div>
                   ))}
