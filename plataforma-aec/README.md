@@ -85,6 +85,7 @@ plataforma-aec/
 │  │  ├─ cad/dxf-qto.ts        parser DXF + quantitativos por camada
 │  │  ├─ cad/civil3d.ts        volumes de corte/aterro (CSV e LandXML)
 │  │  ├─ import/               importador universal: ifc, redes (.inp), landxml, tabelas, exemplos
+│  │  ├─ composicoes/          motor.ts (Quantifik), tabelas.ts, fonte.ts (SINAPI e ORSE analíticos)
 │  │  ├─ orcamento/            analitico.ts (vínculos, busca, cálculo) · bases.ts (catálogo de preços)
 │  │  ├─ urbanismo/quadro.ts   quadro de áreas de loteamento
 │  │  ├─ briefing/scope.ts     briefing → escopo e entregáveis
@@ -93,7 +94,7 @@ plataforma-aec/
 │  │  └─ rbac.ts · format.ts · demo-data.ts · firebase/client.ts
 │  ├─ hooks/                   use-auth (claims), use-colecao (onSnapshot), use-workspace
 │  ├─ components/              ui/ · layout/ · dashboard/ · budget/ · cad/ · contracts/
-│  └─ app/(app)/               dashboard · briefing · cad · quantitativos · orcamento · contratos   (+ /login)
+│  └─ app/(app)/               dashboard · briefing · cad · quantitativos · composicoes · orcamento · contratos
 ├─ tests/core.test.ts · tests/importacao.test.ts · tests/rules/firestore.rules.test.ts
 └─ data/cub-modelo.csv
 ```
@@ -110,6 +111,8 @@ tenants/{tenantId}                         razão social, CNPJ, branding, RT (CR
  ├─ members/{uid}                          nome, email, role, projectIds          (escrita: função definirPapel)
  ├─ clients/{clientId}
  ├─ cubOverrides/{UF}_{AAAA-MM}            ajustes do tenant sobre o CUB oficial   (auditado)
+ ├─ cotacoes/{id}                          numero, cliente, obra, bdi, itens[] (serviço, quantidade, medidas)
+ ├─ config/composicoes                     BDI, regime, horas, encargos, pisos, preços digitados
  ├─ vinculos/{id}                          chave do item, fonte, codigo, fator, estado=confirmado
  ├─ notifications/{id}                     tipo, titulo, mensagem, lidaPor[], destinatarios[]
  ├─ auditLogs/{id}                         acao, recurso, caminho, uid, antes, depois, em   (imutável)
@@ -175,6 +178,32 @@ os projetos. Números da descrição (DN, espessura, fck) são obrigatórios na 
 
 **Tempo real.** A tela assina `quantities` e `vinculos` com `onSnapshot`: uma nova revisão enviada
 (pela tela, pelo `sync-cad.ps1` ou por um colega) recalcula o orçamento de todos na hora.
+
+## Serviços & Cotações (Quantifik integrado)
+
+Tela `/composicoes`. É o Quantifik dentro da plataforma, com o mesmo cálculo:
+
+- **Consulta de serviços** por atividade, código ou descrição, em SINAPI-BA e ORSE-SE.
+- **Quantitativo por medidas** (comprimento × largura × altura × profundidade × peças) e consumo
+  de cada insumo, com composições auxiliares abertas ou não.
+- **Preços:** mão de obra horista pelo piso do Sinduscon-BA (piso ÷ horas × encargos) mais os
+  encargos complementares da função no SINAPI; insumos pelo preço mediano; composições
+  auxiliares recalculadas; preço digitado tem prioridade. BDI e regime de desoneração.
+- **Cotações por cliente** com numeração anual, BDI próprio, PDF A4 com timbre do escritório,
+  resumo por natureza de custo e composição de custos opcional. Exporta e importa em arquivo
+  (inclusive a cópia de segurança do Quantifik).
+
+Diferenças em relação ao Quantifik: cotações e parâmetros ficam no escritório (`cotacoes` e
+`config/composicoes` no Firestore), não no navegador de cada pessoa; o ORSE vem pronto do
+catálogo de bases, sem importação manual; exige login e conexão (não funciona offline); a
+importação de uma base própria por planilha ainda não foi trazida.
+
+**Dados.** O SINAPI analítico é lido do `index.html` do Quantifik (o mesmo bloco que o robô
+regrava todo mês), configurável em `NEXT_PUBLIC_QUANTIFIK_DATA_URL`.
+
+**Paridade.** `tests/composicoes.test.ts` executa o código original do Quantifik e o motor novo
+sobre as mesmas composições e exige insumos, preços e origens idênticos. As tabelas e expressões
+(`composicoes/tabelas.ts`) foram copiadas literalmente do original.
 
 ## Convenção de camadas para o QTO
 

@@ -45,6 +45,20 @@ service cloud.firestore {
         allow write: if socio(tenantId);
       }
 
+      // Cotações por cliente (serviços + medidas) e parâmetros de preço do escritório.
+      match /cotacoes/{id} {
+        allow read: if equipe(tenantId);
+        allow create, update: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
+          && request.resource.data.tenantId == tenantId
+          && request.resource.data.itens is list && request.resource.data.itens.size() <= 500;
+        allow delete: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista']);
+      }
+      match /config/{id} {
+        allow read: if equipe(tenantId);
+        allow write: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
+          && request.resource.data.tenantId == tenantId;
+      }
+
       // Item de quantitativo → composição de preço. Vale para todos os projetos do tenant.
       match /vinculos/{id} {
         allow read: if equipe(tenantId);

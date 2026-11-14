@@ -157,3 +157,20 @@ describe('quantitativos e vínculos', () => {
     await assertFails(setDoc(doc(orc, 'tenants/A/vinculos/v3'), { ...v, tenantId: 'B' }));
   });
 });
+
+describe('cotações e parâmetros de preço', () => {
+  const cot = { tenantId: 'A', numero: '001/2026', cliente: 'X', itens: [] };
+  it('orçamentista grava; projetista só lê; cliente e outro tenant não acessam', async () => {
+    const orc = como('orc1', 'A', 'orcamentista');
+    await assertSucceeds(setDoc(doc(orc, 'tenants/A/cotacoes/c1'), cot));
+    await assertSucceeds(setDoc(doc(orc, 'tenants/A/config/composicoes'), { tenantId: 'A', bdi: 25 }));
+    const proj = como('proj1', 'A', 'projetista');
+    await assertSucceeds(getDoc(doc(proj, 'tenants/A/cotacoes/c1')));
+    await assertFails(setDoc(doc(proj, 'tenants/A/cotacoes/c2'), cot));
+    await assertFails(setDoc(doc(proj, 'tenants/A/config/composicoes'), { tenantId: 'A', bdi: 0 }));
+    await assertFails(getDoc(doc(como('cli1', 'A', 'cliente'), 'tenants/A/cotacoes/c1')));
+    await assertFails(getDoc(doc(como('uB', 'B', 'socio_diretor'), 'tenants/A/cotacoes/c1')));
+    await assertFails(setDoc(doc(orc, 'tenants/A/cotacoes/c3'), { ...cot, tenantId: 'B' }));
+    await assertSucceeds(deleteDoc(doc(orc, 'tenants/A/cotacoes/c1')));
+  });
+});
