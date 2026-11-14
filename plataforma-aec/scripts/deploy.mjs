@@ -14,7 +14,8 @@
 //
 // --simular mostra o que seria feito sem executar nada.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,6 +61,25 @@ export function planejar(o) {
   return { erros: [], passos, site, config, url: comHosting ? `https://${site}.web.app` : undefined };
 }
 
+/**
+ * Em ambientes sem login interativo (CI, sessões em nuvem) a chave da conta de serviço chega
+ * pela variável FIREBASE_SERVICE_ACCOUNT_JSON. O Firebase CLI espera um ARQUIVO, então a chave
+ * é gravada fora do repositório, legível só pelo usuário atual, e apontada por
+ * GOOGLE_APPLICATION_CREDENTIALS. O conteúdo nunca é impresso.
+ */
+export function prepararCredencial(env = process.env) {
+  if (env.GOOGLE_APPLICATION_CREDENTIALS || !env.FIREBASE_SERVICE_ACCOUNT_JSON) return null;
+  let chave;
+  try { chave = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON); }
+  catch { throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON não é um JSON válido (cole o conteúdo inteiro do arquivo da chave).'); }
+  if (chave.type !== 'service_account' || !chave.private_key || !chave.client_email) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON não é uma chave de conta de serviço.');
+  const dir = mkdtempSync(join(tmpdir(), 'aec-cred-'));
+  const arquivo = join(dir, 'conta-de-servico.json');
+  writeFileSync(arquivo, JSON.stringify(chave), { mode: 0o600 });
+  env.GOOGLE_APPLICATION_CREDENTIALS = arquivo;
+  return { arquivo, conta: chave.client_email, projeto: chave.project_id };
+}
+
 function configCompartilhada() {
   const cfg = JSON.parse(readFileSync(join(raiz, 'firebase.json'), 'utf8'));
   cfg.firestore.rules = '.regras-mescladas/firestore.rules';
@@ -75,6 +95,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (plano.erros.length) { console.error(plano.erros.map((e) => `ERRO: ${e}`).join('\n')); process.exit(2); }
   if (valor('compartilhado-com') && !existsSync(join(resolve(valor('compartilhado-com')), 'firestore.rules'))) {
     console.error(`ERRO: ${resolve(valor('compartilhado-com'))} não contém firestore.rules.`); process.exit(2);
+  }
+  let credencial = null;
+  if (!simular) {
+    try { credencial = prepararCredencial(); } catch (e) { console.error(`ERRO: ${e.message}`); process.exit(2); }
+    if (credencial) {
+      console.log(`Usando a conta de serviço ${credencial.conta}.`);
+      if (credencial.projeto && credencial.projeto !== valor('projeto')) console.log(`AVISO: a chave é do projeto "${credencial.projeto}", mas a publicação é em "${valor('projeto')}".`);
+      process.on('exit', () => rmSync(dirname(credencial.arquivo), { recursive: true, force: true }));
+    }
   }
   for (const p of plano.passos) {
     const cmd = p.firebase ? `firebase ${p.firebase.join(' ')}` : p.node ? `node ${p.node.join(' ')}` : `(interno) ${p.interno}`;

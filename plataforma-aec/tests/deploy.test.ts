@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error módulo de script sem tipos
-import { planejar } from '../scripts/deploy.mjs';
+import { planejar, prepararCredencial } from '../scripts/deploy.mjs';
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { dirname } from 'node:path';
 // @ts-expect-error módulo de script sem tipos
 import { mesclar } from '../scripts/mesclar-regras.mjs';
 
@@ -52,5 +54,25 @@ describe('mescla de regras', () => {
   });
   it('recusa quando há função ou caminho repetido', () => {
     expect(() => mesclar(a, a, raiz)).toThrow(/função fa\(\).*caminho \/tenants\/\{\}/);
+  });
+});
+
+describe('credencial por variável de ambiente', () => {
+  it('grava a chave fora do repositório, só para o usuário, e aponta o CLI para ela', () => {
+    const env: Record<string, string> = { FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({ type: 'service_account', private_key: 'x', client_email: 'robo@p.iam.gserviceaccount.com', project_id: 'p' }) };
+    const c = prepararCredencial(env) as { arquivo: string; conta: string; projeto: string };
+    try {
+      expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBe(c.arquivo);
+      expect(c.arquivo.startsWith(process.cwd())).toBe(false);
+      expect(statSync(c.arquivo).mode & 0o077).toBe(0);
+      expect(JSON.parse(readFileSync(c.arquivo, 'utf8')).client_email).toBe('robo@p.iam.gserviceaccount.com');
+    } finally { rmSync(dirname(c.arquivo), { recursive: true, force: true }); }
+    expect(existsSync(c.arquivo)).toBe(false);
+  });
+  it('não mexe quando já há credencial ou quando não há variável; recusa chave inválida', () => {
+    expect(prepararCredencial({ GOOGLE_APPLICATION_CREDENTIALS: '/x', FIREBASE_SERVICE_ACCOUNT_JSON: '{}' })).toBeNull();
+    expect(prepararCredencial({})).toBeNull();
+    expect(() => prepararCredencial({ FIREBASE_SERVICE_ACCOUNT_JSON: 'abc' })).toThrow(/JSON válido/);
+    expect(() => prepararCredencial({ FIREBASE_SERVICE_ACCOUNT_JSON: '{"type":"authorized_user"}' })).toThrow(/conta de serviço/);
   });
 });
