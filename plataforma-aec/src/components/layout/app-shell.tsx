@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Bell, ChevronRight, CircleHelp, LogOut, Menu, Moon, Search, Sun, X } from 'lucide-react';
+import { Nome, Simbolo } from '@/components/layout/marca';
 import { Onboarding } from '@/components/layout/onboarding';
 import { Paleta } from '@/components/layout/paleta';
 import { Button } from '@/components/ui/button';
@@ -57,8 +58,8 @@ function Notificacoes() {
 function Marca({ compacta }: { compacta?: boolean }) {
   return (
     <Link href={INICIO.href} className="flex items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="ObraTop — Início">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[hsl(233_70%_56%)] to-[hsl(262_75%_60%)] text-sm font-bold text-white shadow-lg shadow-primary/30">OT</span>
-      {!compacta && <span className="text-[15px] font-semibold tracking-tight">ObraTop</span>}
+      <Simbolo className="h-9 w-9 shrink-0 drop-shadow-[0_6px_10px_rgba(91,71,214,0.35)]" />
+      {!compacta && <Nome className="text-[16px] font-bold tracking-tight" />}
     </Link>
   );
 }

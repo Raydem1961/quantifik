@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { Building2, KeyRound } from 'lucide-react';
+import { Simbolo } from '@/components/layout/marca';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
@@ -30,6 +31,7 @@ export function Onboarding() {
   return (
     <div className="grid min-h-screen place-items-center p-6">
       <div className="w-full max-w-md rounded-2xl border bg-card p-7 shadow-xl">
+        <Simbolo className="mb-4 h-11 w-11" />
         <h1 className="text-lg font-semibold tracking-tight">Bem-vindo ao ObraTop</h1>
         <p className="mt-1 text-sm text-muted-foreground">A conta {usuario?.email} ainda não está ligada a nenhuma empresa.</p>
         <div role="tablist" className="mt-5 grid grid-cols-2 gap-2">

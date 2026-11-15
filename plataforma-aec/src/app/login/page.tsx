@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth';
 import { BarChart3, Boxes, HardHat, ShieldCheck } from 'lucide-react';
+import { Nome, Simbolo } from '@/components/layout/marca';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
 import { auth, MODO_DEMO } from '@/lib/firebase/client';
@@ -55,7 +56,7 @@ export default function Login() {
     <main className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
       <section className="aurora relative hidden flex-col justify-between overflow-hidden border-r p-12 lg:flex" style={{ ['--area' as string]: '233 70% 56%' }}>
         <p className="flex items-center gap-3 text-lg font-semibold tracking-tight">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[hsl(233_70%_56%)] to-[hsl(262_75%_60%)] text-sm font-bold text-white shadow-lg shadow-primary/30">OT</span>ObraTop
+          <Simbolo className="h-11 w-11 drop-shadow-[0_8px_14px_rgba(91,71,214,0.35)]" /><Nome className="text-xl font-bold tracking-tight" />
         </p>
         <div>
           <h1 className="max-w-md text-4xl font-semibold leading-tight tracking-tight">A empresa de engenharia inteira em um só lugar.</h1>
@@ -74,7 +75,7 @@ export default function Login() {
 
       <section className="grid place-items-center p-6">
         <div className="w-full max-w-sm">
-          <p className="mb-8 flex items-center gap-2.5 font-semibold lg:hidden"><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[hsl(233_70%_56%)] to-[hsl(262_75%_60%)] text-sm font-bold text-white">OT</span>ObraTop</p>
+          <p className="mb-8 flex items-center gap-2.5 font-semibold lg:hidden"><Simbolo className="h-9 w-9" /><Nome className="font-bold tracking-tight" /></p>
           <h2 className="text-2xl font-semibold tracking-tight">{modo === 'entrar' ? 'Entrar' : 'Criar conta'}</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {MODO_DEMO ? 'Modo demonstração — Firebase não configurado.' : convite && modo === 'criar' ? 'Você recebeu um convite. Crie sua conta com o e-mail convidado.' : modo === 'entrar' ? 'Use a conta da sua empresa.' : 'Depois você cria sua empresa ou usa um convite.'}

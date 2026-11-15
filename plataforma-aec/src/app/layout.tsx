@@ -5,11 +5,11 @@ import { WorkspaceProvider } from '@/hooks/use-workspace';
 import { Pwa } from '@/components/layout/pwa';
 import './globals.css';
 
-export const viewport: Viewport = { themeColor: '#3b4cca', width: 'device-width', initialScale: 1 };
+export const viewport: Viewport = { themeColor: '#4f46e5', width: 'device-width', initialScale: 1 };
 
 export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
-  icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
+  icons: { icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/icon-192.png', sizes: '192x192', type: 'image/png' }], apple: '/apple-touch-icon.png' },
   appleWebApp: { capable: true, title: 'ObraTop' },
   title: 'ObraTop — Gestão de obras, projetos e orçamento',
   description: 'ERP para escritórios de arquitetura e engenharia: briefing, CAD/QTO, orçamento CUB, contratos e assinatura digital.',
