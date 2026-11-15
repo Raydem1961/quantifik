@@ -49,6 +49,19 @@ fs.writeFileSync(path.join(D, 'extrato.ofx'), OFX); fs.writeFileSync(path.join(D
   await ir('integracoes/fiscal', 1500); await tenta('nfe', async () => { await p.locator('input[type=file]').setInputFiles(path.join(D, 'nota.xml')); }); await foto('33-fiscal', { inteira: true, espera: 1200 });
   await ir('integracoes/esocial', 1500); await foto('34-esocial');
   await ir('admin', 1500); await foto('35-admin', { inteira: true });
+  await ir('clientes', 1500);
+  await tenta('portal', async () => {
+    await p.getByLabel(/E-mail\(s\) do cliente de Residencial/).fill('cliente@exemplo.com');
+    await p.getByRole('button', { name: 'Liberar portal' }).nth(1).click(); await p.waitForTimeout(600);
+    await foto('39-clientes');
+    await p.getByRole('button', { name: 'Ver como o cliente' }).nth(1).click(); await p.waitForTimeout(900);
+    const painel = p.locator('.aurora').last();
+    await p.setViewportSize({ width: 1360, height: 2600 }); await p.waitForTimeout(500);
+    const cx = await painel.boundingBox();
+    await p.screenshot({ path: path.join(D, 'img', '40-portal-topo.jpg'), type: 'jpeg', quality: 80, clip: { x: cx.x - 12, y: cx.y - 12, width: cx.width + 24, height: Math.min(cx.height + 24, 880) } });
+    await p.screenshot({ path: path.join(D, 'img', '41-portal-detalhe.jpg'), type: 'jpeg', quality: 80, clip: { x: cx.x - 12, y: cx.y + 868, width: cx.width + 24, height: Math.min(cx.height - 856, 900) } });
+    await p.setViewportSize({ width: 1360, height: 850 });
+  });
   await ctx.addInitScript(() => localStorage.setItem('theme', 'dark')); await ir('inicio'); await foto('36-escuro');
   const cel = await b.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 2 }); await cel.addInitScript(() => localStorage.setItem('theme', 'light'));
   const pc = await cel.newPage(); await pc.goto(`${A}/inicio/`, { waitUntil: 'load' }); await pc.waitForTimeout(900); await pc.screenshot({ path: path.join(D, 'img', '37-celular.jpg'), type: 'jpeg', quality: 80 });

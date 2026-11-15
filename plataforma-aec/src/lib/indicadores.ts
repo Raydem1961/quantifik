@@ -91,6 +91,13 @@ export function kpisDaArea(area: string, d: Dados, hoje: string): Kpi[] {
       return [{ rotulo: 'Orçado nas obras', valor: brl(venda), detalhe: `${b.length} itens` }, { rotulo: 'Custo direto', valor: brl(custo) }, { rotulo: 'BDI médio', valor: custo > 0 ? `${((venda / custo - 1) * 100).toFixed(1)}%` : '—' },
         { rotulo: 'Custo incorrido', valor: brl(incurredCost(vivos(d.finance), hoje)), detalhe: 'despesas por competência' }];
     }
+    case 'clientes': {
+      const comCliente = ativas.filter((w) => String(w.client ?? '').trim());
+      const rec = vivos(d.finance).filter((x) => x.type === 'Receita');
+      const vencidas = rec.filter((x) => x.status !== 'Recebido' && x.status !== 'Previsto' && dias(x.dueDate, hoje) < 0);
+      return [{ rotulo: 'Obras com cliente', valor: String(comCliente.length), detalhe: `${ativas.length} em andamento` }, { rotulo: 'Recebido dos clientes', valor: brl(rec.filter((x) => x.status === 'Recebido').reduce((t, x) => t + n(x.value), 0)) },
+        { rotulo: 'A receber', valor: brl(rec.filter((x) => x.status !== 'Recebido').reduce((t, x) => t + n(x.value), 0)) }, { rotulo: 'Parcelas vencidas', valor: String(vencidas.length), alerta: vencidas.length > 0 }];
+    }
     case 'integracoes': {
       const f = vivos(d.finance), abertas = f.filter((x) => !x.bankRef && !['Pago', 'Recebido'].includes(String(x.status)));
       const notas = new Set(f.filter((x) => x.nfeKey).map((x) => String(x.nfeKey))).size;

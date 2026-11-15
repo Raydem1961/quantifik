@@ -5,7 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Bell, ChevronRight, CircleHelp, LogOut, Menu, Moon, Search, Sun, X } from 'lucide-react';
 import { Nome, Simbolo } from '@/components/layout/marca';
-import { Onboarding } from '@/components/layout/onboarding';
+import { EntradaSemEmpresa } from '@/components/portal/portal-do-cliente';
+import { SincronizadorDePortais } from '@/components/portal/sincronizador';
 import { Paleta } from '@/components/layout/paleta';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/form';
@@ -136,7 +137,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (carregando || !usuario) return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Carregando…</div>;
-  if (semVinculo) return <Onboarding />;
+  if (semVinculo) return <EntradaSemEmpresa />;
 
   const { area, tela } = localizar(caminho, areaLembrada);
   const soDono = role === 'socio_diretor';
@@ -185,6 +186,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6" style={area ? corDaArea(area.matiz) : undefined}>{children}</main>
       </div>
       <Paleta aberta={paleta} onFechar={() => setPaleta(false)} />
+      <SincronizadorDePortais />
     </div>
   );
 }

@@ -5,10 +5,10 @@
 import {
   BadgeDollarSign, Boxes, Briefcase, Building, Building2, CalendarRange, Calculator, ClipboardCheck, ClipboardList, Compass, FileSignature, FileText,
   FolderKanban, Gauge, Hammer, HardHat, Landmark, LayoutGrid, NotebookPen, Package, PenTool, Ruler, ScrollText, ShieldAlert, ShieldCheck, ShoppingCart,
-  Store, Truck, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, type LucideIcon,
+  Store, Truck, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, type LucideIcon,
 } from 'lucide-react';
 
-export type IdArea = 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
+export type IdArea = 'clientes' | 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
 
 export interface Tela { href: string; rotulo: string; icone: LucideIcon; descricao: string; soDono?: boolean }
 export interface Area {
@@ -65,6 +65,9 @@ export const AREAS: Area[] = [
     { href: '/gestao/quality/', rotulo: 'Qualidade', icone: ClipboardCheck, descricao: 'Não conformidades e planos de ação' },
     { href: '/gestao/safety/', rotulo: 'Segurança do trabalho', icone: ShieldAlert, descricao: 'DDS, inspeções, incidentes e treinamentos' },
     { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivos, revisões, vencimentos e aprovações' },
+  ] },
+  { id: 'clientes', nome: 'Clientes', resumo: 'Portal em que o cliente acompanha o contrato.', icone: Handshake, matiz: 198, telas: [
+    { href: '/clientes/', rotulo: 'Portal do Cliente', icone: MonitorSmartphone, descricao: 'Libere ao cliente o painel do contrato: curva S, medições, parcelas e prazos', soDono: true },
   ] },
   { id: 'integracoes', nome: 'Fiscal e Integrações', resumo: 'Bancos, notas fiscais e eSocial.', icone: Plug, matiz: 190, telas: [
     { href: '/integracoes/bancos/', rotulo: 'Bancos e Pix', icone: Banknote, descricao: 'Conciliação do extrato (OFX) e cobrança por Pix' },

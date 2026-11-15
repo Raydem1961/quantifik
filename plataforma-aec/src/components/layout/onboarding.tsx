@@ -4,12 +4,15 @@ import { Building2, KeyRound } from 'lucide-react';
 import { Simbolo } from '@/components/layout/marca';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
+import { sendEmailVerification } from 'firebase/auth';
 import { useAuth } from '@/hooks/use-auth';
+import { auth } from '@/lib/firebase/client';
 import { aceitarConvite, criarEmpresa } from '@/lib/obratop/empresa';
 
 /** Primeiro acesso: criar a empresa (vira proprietário) ou entrar com um convite. */
 export function Onboarding() {
-  const { usuario, sair, recarregar } = useAuth();
+  const { usuario, sair, recarregar, emailVerificado, reverificar } = useAuth();
+  const [aviso, setAviso] = React.useState('');
   const [modo, setModo] = React.useState<'empresa' | 'convite'>('empresa');
   const [nome, setNome] = React.useState('');
   const [cnpj, setCnpj] = React.useState('');
@@ -55,6 +58,17 @@ export function Onboarding() {
           <Button type="submit" disabled={estado.ocupado}>{estado.ocupado ? 'Aguarde…' : modo === 'empresa' ? 'Criar empresa' : 'Entrar na empresa'}</Button>
           <Button variant="ghost" onClick={() => void sair()}>Sair</Button>
         </form>
+        <div className="mt-5 rounded-xl border border-dashed p-4">
+          <p className="text-sm font-medium">É cliente de uma construtora?</p>
+          {emailVerificado ? <p className="mt-1 text-xs text-muted-foreground">Nenhum contrato foi liberado para {usuario?.email} até agora. Peça à construtora para liberar o seu acesso ao Portal do Cliente com este e-mail.</p> : (<>
+            <p className="mt-1 text-xs text-muted-foreground">Para ver o seu contrato, confirme o seu e-mail: enviamos um link para {usuario?.email}. Depois de clicar no link, volte aqui.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => void reverificar().then(() => setAviso('Ainda não confirmado. Clique no link do e-mail e tente de novo.'), () => setAviso('Não foi possível verificar agora.'))}>Já confirmei</Button>
+              <Button size="sm" variant="outline" onClick={() => { const u = auth().currentUser; if (u) void sendEmailVerification(u).then(() => setAviso('E-mail de confirmação reenviado. Confira também o spam.'), () => setAviso('Aguarde um minuto antes de pedir outro e-mail.')); }}>Reenviar e-mail</Button>
+            </div>
+          </>)}
+          {aviso && <p role="status" className="mt-2 text-xs text-muted-foreground">{aviso}</p>}
+        </div>
       </div>
     </div>
   );

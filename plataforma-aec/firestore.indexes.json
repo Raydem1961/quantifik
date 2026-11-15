@@ -1,11 +1,62 @@
 {
   "indexes": [
-    { "collectionGroup": "projects", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "fim", "order": "ASCENDING" }] },
-    { "collectionGroup": "artRrt", "queryScope": "COLLECTION_GROUP", "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "vencimento", "order": "ASCENDING" }] },
-    { "collectionGroup": "timesheets", "queryScope": "COLLECTION_GROUP", "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "inicio", "order": "DESCENDING" }] },
-    { "collectionGroup": "cubTables", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uf", "order": "ASCENDING" }, { "fieldPath": "competencia", "order": "DESCENDING" }] }
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fim",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cubTables",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uf",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "competencia",
+          "order": "DESCENDING"
+        }
+      ]
+    }
   ],
   "fieldOverrides": [
-    { "collectionGroup": "artRrt", "fieldPath": "vencimento", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }, { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
+    {
+      "collectionGroup": "artRrt",
+      "fieldPath": "orgId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "timesheets",
+      "fieldPath": "orgId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    }
   ]
 }

@@ -199,6 +199,48 @@ describe('perfis dos módulos novos', () => {
   });
 });
 
+describe('portal do cliente', () => {
+  const painel = { orgId: 'A', workId: 'w1', emails: ['cliente@x.com'], obra: { nome: 'Obra 1' } };
+  const verificado = (uid: string, email: string) => env.authenticatedContext(uid, { email, email_verified: true }).firestore();
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'portalCliente/A_w1'), painel);
+      await setDoc(doc(db, 'portalCliente/B_wb'), { orgId: 'B', workId: 'wb', emails: ['outro@x.com'] });
+    });
+  });
+  it('cliente com e-mail confirmado lê só o próprio painel — e nada da empresa', async () => {
+    const db = verificado('cli', 'cliente@x.com');
+    await assertSucceeds(getDoc(doc(db, 'portalCliente/A_w1')));
+    await assertSucceeds(getDocs(query(collection(db, 'portalCliente'), where('emails', 'array-contains', 'cliente@x.com'))));
+    await assertFails(getDoc(doc(db, 'portalCliente/B_wb')));
+    await assertFails(getDocs(collection(db, 'portalCliente')));
+    await assertFails(getDocs(query(collection(db, 'portalCliente'), where('emails', 'array-contains', 'outro@x.com'))));
+    await assertFails(getDoc(doc(db, `${O}/works/w1`)));
+    await assertFails(getDocs(collection(db, `${O}/finance`)));
+    await assertFails(getDoc(doc(db, O)));
+    await assertFails(updateDoc(doc(db, 'portalCliente/A_w1'), { emails: ['cliente@x.com', 'amigo@x.com'] }));
+    await assertFails(deleteDoc(doc(db, 'portalCliente/A_w1')));
+  });
+  it('e-mail não confirmado ou de outra pessoa não lê', async () => {
+    await assertFails(getDoc(doc(como('falso', 'cliente@x.com'), 'portalCliente/A_w1')));
+    await assertFails(getDoc(doc(verificado('outro', 'outro@x.com'), 'portalCliente/A_w1')));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'portalCliente/A_w1')));
+  });
+  it('só o proprietário publica, e só painel de obra da própria empresa', async () => {
+    await assertSucceeds(setDoc(doc(como('dono'), 'portalCliente/A_w2'), { ...painel, workId: 'w2' }));
+    await assertSucceeds(getDoc(doc(como('dono'), 'portalCliente/A_w1')));
+    await assertSucceeds(deleteDoc(doc(como('dono'), 'portalCliente/A_w2')));
+    await assertFails(setDoc(doc(como('coord'), 'portalCliente/A_w2'), { ...painel, workId: 'w2' }));
+    await assertFails(getDoc(doc(como('proj'), 'portalCliente/A_w1')));
+    await assertFails(setDoc(doc(como('dono'), 'portalCliente/A_w2'), painel)); // id não corresponde à obra
+    await assertFails(setDoc(doc(como('dono'), 'portalCliente/A_naoexiste'), { ...painel, workId: 'naoexiste' }));
+    await assertFails(setDoc(doc(como('donoB'), 'portalCliente/A_w1'), painel));
+    await assertFails(updateDoc(doc(como('dono'), 'portalCliente/A_w1'), { orgId: 'B' }));
+    await assertFails(setDoc(doc(como('dono'), 'portalCliente/A_w2'), { ...painel, workId: 'w2', emails: Array.from({ length: 11 }, (_, i) => `c${i}@x.com`) }));
+  });
+});
+
 describe('dados do servidor', () => {
   it('auditoria: só o proprietário lê; ninguém escreve', async () => {
     await assertSucceeds(getDoc(doc(como('dono'), `${O}/auditLogs/l1`)));

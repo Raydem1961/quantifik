@@ -32,6 +32,11 @@ DAR ACESSO À EQUIPE
   a pessoa cria a própria senha. O perfil (Coordenador, Orçamentista, Projetista) é escolhido
   na tabela "Equipe" depois que ela entra.
 
+DAR ACESSO AO CLIENTE DA OBRA
+  No aplicativo: Clientes → Portal do Cliente. Informe o e-mail do cliente na obra dele e
+  clique em "Liberar portal". Ele cria a conta com esse e-mail, confirma o e-mail e passa a ver
+  somente o painel do contrato dele (cronograma, medições, parcelas, prazos).
+
 IMPORTANTE
   • A chave baixada (chave-firebase.json) dá acesso total ao seu projeto: não envie a ninguém.
   • O plano Blaze do Firebase é necessário para as funções do servidor (versões de CAD,

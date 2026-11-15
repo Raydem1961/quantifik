@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, GoogleAuthProvider, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth';
 import { BarChart3, Boxes, HardHat, ShieldCheck } from 'lucide-react';
 import { Nome, Simbolo } from '@/components/layout/marca';
 import { Button } from '@/components/ui/button';
@@ -50,7 +50,7 @@ export default function Login() {
   };
   const enviar = () => modo === 'entrar'
     ? executar(() => signInWithEmailAndPassword(auth(), email, senha), 'Não foi possível entrar. Confira e-mail e senha.')
-    : executar(async () => { const c = await createUserWithEmailAndPassword(auth(), email.trim(), senha); if (nome.trim()) await updateProfile(c.user, { displayName: nome.trim() }); }, 'Não foi possível criar a conta. Confira os dados e tente de novo.');
+    : executar(async () => { const c = await createUserWithEmailAndPassword(auth(), email.trim(), senha); if (nome.trim()) await updateProfile(c.user, { displayName: nome.trim() }); void sendEmailVerification(c.user).catch(() => { /* pode ser reenviado na tela seguinte */ }); }, 'Não foi possível criar a conta. Confira os dados e tente de novo.');
 
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">

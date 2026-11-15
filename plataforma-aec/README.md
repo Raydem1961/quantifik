@@ -29,6 +29,7 @@ Em servidor/CI: `FIREBASE_SERVICE_ACCOUNT_JSON='<conteúdo da chave>' npm run in
 | Financeiro | Lançamentos · Contratos de obra · Bancos e Pix · Notas fiscais e CNPJ |
 | Recursos Humanos | Pessoal · Horas técnicas · eSocial |
 | Qualidade e Segurança | Qualidade · Segurança do trabalho · Documentos |
+| Clientes | Portal do Cliente: painel do contrato (Curva S, medições, parcelas, prazos) só para o cliente da obra |
 | Fiscal e Integrações | Bancos e Pix · Notas fiscais e CNPJ · eSocial |
 | Administrativo | Empresa e equipe (convites, obra e perfil de cada pessoa) · Documentos |
 
@@ -44,6 +45,10 @@ O mapa das áreas fica em `src/lib/modulos.ts`; os indicadores, em `src/lib/indi
   não cria obras nem fornecedores e não exclui (exclusão é lógica: `deleted: true`).
 - **Perfis dos módulos novos** (Coordenador, Orçamentista, Projetista):
   `organizations/{org}/perfis/{uid}`, que só o proprietário grava — ninguém se promove.
+- **Portal do Cliente**: `portalCliente/{org}_{obra}` guarda o retrato do contrato (montado por
+  `src/lib/portal.ts`, sem custos nem dados de outras obras). Só o proprietário grava; o cliente
+  **não é membro** da empresa e lê apenas os painéis em que seu e-mail **confirmado** está listado.
+  O painel é regravado sozinho enquanto o proprietário usa o aplicativo.
 - **Regras** = regras do ObraTop + extensão. `regras/obratop-base.*` é a cópia das regras do
   ObraTop 3.39.13; `regras/extensao-*.rules` são os módulos novos; `npm run regras:gerar`
   produz `firestore.rules` e `storage.rules`. Na publicação, a base é **o que está no ar**
@@ -81,9 +86,9 @@ npm run build          # exportação estática em out/ + service worker
 
 ```bash
 npm run typecheck && npm run lint
-npm test                  # 80 testes de unidade (motores de cálculo, importadores, integrações, instalador)
+npm test                  # 89 testes de unidade (motores de cálculo, importadores, integrações, instalador)
 npm run test:obratop      # testes originais dos módulos de cálculo do ObraTop (34)
-npm run test:rules        # 20 testes das regras de segurança no emulador
+npm run test:rules        # 23 testes das regras de segurança no emulador
 npm run test:instalador   # reconhecimento do ObraTop existente (4)
 
 # ponta a ponta, com o Firebase Emulator Suite
@@ -97,6 +102,7 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-aec.appspot.com NEXT_PUBLIC_USE_EMULATO
 npx serve out -l 4173 &
 npm run test:e2e:ui           # 73: todas as áreas, convite → conta → empresa, papéis
 npm run test:e2e:integracoes  # 21: OFX, Pix, NF-e, CNPJ (resposta simulada), eSocial
+npm run test:e2e:portal       # 20: liberar portal, cliente confirma e-mail, vê só o contrato, atualização, fim do acesso
 npm run test:e2e:offline      # 5: lançar sem internet e sincronizar
 ```
 

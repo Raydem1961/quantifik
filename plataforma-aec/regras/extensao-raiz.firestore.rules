@@ -26,3 +26,18 @@
     match /{path=**}/timesheets/{id} {
       allow read: if resource.data.orgId is string && gestorAec(resource.data.orgId);
     }
+
+    // ── Portal do Cliente ──
+    // Um documento por obra (id = {org}_{obra}) com o retrato do contrato. Só o proprietário grava.
+    // O cliente NÃO é membro da empresa: lê apenas os painéis em que seu e-mail (confirmado) está listado.
+    function clienteDoPortal(dados) {
+      return signedIn() && request.auth.token.email_verified == true && request.auth.token.email in dados.emails;
+    }
+    match /portalCliente/{portalId} {
+      allow read: if clienteDoPortal(resource.data) || owner(resource.data.orgId);
+      allow create, update: if owner(request.resource.data.orgId)
+        && portalId == request.resource.data.orgId + '_' + request.resource.data.workId
+        && request.resource.data.emails is list && request.resource.data.emails.size() <= 10
+        && exists(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)/works/$(request.resource.data.workId));
+      allow delete: if owner(resource.data.orgId);
+    }

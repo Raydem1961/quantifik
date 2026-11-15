@@ -22,7 +22,8 @@
     "instalar": "node scripts/instalar.mjs",
     "test:instalador": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/instalador.e2e.mjs\"",
     "test:e2e:integracoes": "node tests/e2e/integracoes.e2e.cjs",
-    "regras:gerar": "node scripts/gerar-regras.mjs"
+    "regras:gerar": "node scripts/gerar-regras.mjs",
+    "test:e2e:portal": "node tests/e2e/portal.e2e.cjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",
