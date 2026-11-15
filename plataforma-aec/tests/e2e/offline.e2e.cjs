@@ -14,15 +14,16 @@ const T = 'offline-co';
 let ok = 0; const falhas = [];
 const checar = (n, c, d = '') => { if (c) { ok++; console.log(`  ok   ${n}`); } else { falhas.push(n); console.log(`  FALHA ${n} ${d}`); } };
 const ate = async (fn, ms = 25000) => { const fim = Date.now() + ms; let r; while (Date.now() < fim) { r = await fn(); if (r) return r; await new Promise((x) => setTimeout(x, 400)); } return r; };
-const obras = async () => (await adb.collection(`tenants/${T}/works`).get()).docs.map((d) => d.data().name);
+const obras = async () => (await adb.collection(`organizations/${T}/works`).get()).docs.map((d) => d.data().name);
 
 (async () => {
   const email = `offline-${Date.now()}@teste.test`;
   const u = await getAuth().createUser({ email, password: 'senha-teste-123' });
-  await getAuth().setCustomUserClaims(u.uid, { tenantId: T, role: 'socio_diretor' });
-  await adb.doc(`tenants/${T}`).set({ nomeFantasia: 'Offline Co', razaoSocial: 'Offline Co', cnpj: '', uf: 'BA', custoHoraTecnica: 100, branding: { corPrimaria: '#3b4cca', corSecundaria: '#111827' }, responsavelTecnico: { nome: 'RT', conselho: 'CREA', registro: 'X' } });
-  for (const d of (await adb.collection(`tenants/${T}/works`).get()).docs) await d.ref.delete();
-  await adb.doc(`tenants/${T}/works/w0`).set({ tenantId: T, name: 'Obra já existente', client: 'C', start: '2026-01-01', end: '2026-12-31', status: 'Em andamento', deleted: false });
+  await adb.doc(`organizations/${T}`).set({ name: 'Offline Co', ownerUid: u.uid });
+  await adb.doc(`organizations/${T}/members/${u.uid}`).set({ role: 'owner', status: 'active', email });
+  await adb.doc(`users/${u.uid}`).set({ currentOrg: T });
+  for (const d of (await adb.collection(`organizations/${T}/works`).get()).docs) await d.ref.delete();
+  await adb.doc(`organizations/${T}/works/w0`).set({ name: 'Obra já existente', client: 'C', start: '2026-01-01', end: '2026-12-31', status: 'Em andamento', deleted: false });
   const b = await chromium.launch();
   const ctx = await b.newContext();
   const p = await ctx.newPage();
@@ -30,8 +31,8 @@ const obras = async () => (await adb.collection(`tenants/${T}/works`).get()).doc
     await p.goto('http://localhost:4173/login/', { waitUntil: 'load' });
     await p.getByLabel('E-mail').fill(email); await p.getByLabel('Senha').fill('senha-teste-123');
     await p.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await p.waitForURL('**/dashboard/');
-    await p.goto('http://localhost:4173/gestao/', { waitUntil: 'load' });
+    await p.waitForURL('**/inicio/');
+    await p.goto('http://localhost:4173/gestao/works/', { waitUntil: 'load' });
     await p.getByText('Obra já existente').first().waitFor({ timeout: 20000 });
     await p.evaluate(() => navigator.serviceWorker.ready); await p.waitForTimeout(4000);
 

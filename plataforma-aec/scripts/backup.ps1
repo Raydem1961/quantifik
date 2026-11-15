@@ -39,7 +39,7 @@ try {
   if (-not $SomenteFirestore) {
     Write-Host 'Sincronizando arquivos (CAD e PDFs)' -ForegroundColor Cyan
     # rsync sem exclusão no destino: um arquivo apagado na origem continua no backup.
-    Invoke-Gcloud @('storage', 'rsync', "gs://$BucketOrigem/tenants", "gs://$BucketBackup/storage/tenants", '--recursive', "--project=$ProjectId")
+    Invoke-Gcloud @('storage', 'rsync', "gs://$BucketOrigem/organizations", "gs://$BucketBackup/storage/organizations", '--recursive', "--project=$ProjectId")
   }
 
   Write-Host "Aplicando retenção de $RetencaoDias dias às exportações do Firestore" -ForegroundColor Cyan

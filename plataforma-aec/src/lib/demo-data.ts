@@ -140,7 +140,7 @@ export const DEMO_OBRA: Record<string, Reg[]> = {
     { id: 'o3', workId: 'w2', supplierId: 's1', date: iso(-3), dueDate: iso(9), description: 'Brita graduada simples — 320 m³', value: 41600, status: 'Em cotação' },
   ],
   staff: [
-    { id: 'p1', name: 'Engenheira Residente Demo', role: 'Engenheira civil', admission: iso(-700), salary: 12500, workId: 'w1', status: 'Ativo' },
+    { id: 'p1', name: 'Engenheira Residente Demo', role: 'Engenheira civil', cpf: '529.982.247-25', birthDate: '1988-03-14', cbo: '214205', admission: iso(-700), salary: 12500, workId: 'w1', status: 'Ativo' },
     { id: 'p2', name: 'Mestre de Obras Demo', role: 'Mestre de obras', admission: iso(-420), salary: 6800, workId: 'w1', status: 'Ativo' },
     { id: 'p3', name: 'Encarregado Demo', role: 'Encarregado de pavimentação', admission: iso(-200), salary: 5200, workId: 'w2', status: 'Ativo' },
     { id: 'p4', name: 'Técnica de Segurança Demo', role: 'Técnica de segurança', admission: iso(-150), salary: 4900, status: 'Ativo' },

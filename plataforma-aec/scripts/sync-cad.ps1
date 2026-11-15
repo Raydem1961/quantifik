@@ -74,7 +74,7 @@ function Send-Arquivo([string]$Caminho) {
 
   $seguro = $nome -replace '[^\w.\-]+', '_'
   $carimbo = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-  $destino = "gs://$Bucket/tenants/$TenantId/projects/$projeto/cad/$disciplina/${carimbo}__$seguro"
+  $destino = "gs://$Bucket/organizations/$TenantId/projects/$projeto/cad/$disciplina/${carimbo}__$seguro"
   & gcloud storage cp $Caminho $destino "--project=$ProjectIdFirebase" '--custom-metadata=uid=sync-local' --quiet
   if ($LASTEXITCODE -eq 0) { Write-Host "$(Get-Date -Format 'HH:mm:ss')  enviado  $relativo" -ForegroundColor Green }
   else { Write-Warning "Falha ao enviar $relativo (código $LASTEXITCODE)" }
@@ -88,7 +88,7 @@ foreach ($evento in 'Created', 'Changed', 'Renamed') {
   Register-ObjectEvent -InputObject $monitor -EventName $evento -SourceIdentifier "cad_$evento" | Out-Null
 }
 
-Write-Host "Monitorando $PastaCad → gs://$Bucket/tenants/$TenantId (Ctrl+C para sair)" -ForegroundColor Cyan
+Write-Host "Monitorando $PastaCad → gs://$Bucket/organizations/$TenantId (Ctrl+C para sair)" -ForegroundColor Cyan
 $pendentes = @{}   # caminho → instante do último evento (um "salvar" dispara vários eventos)
 try {
   while ($true) {

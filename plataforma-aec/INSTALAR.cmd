@@ -2,7 +2,7 @@
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
-title Plataforma AEC - Instalar e publicar
+title ObraTop 4 - Instalar e publicar
 where node >nul 2>nul
 if errorlevel 1 (
   echo.

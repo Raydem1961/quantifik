@@ -1,6 +1,6 @@
 {
-  "name": "plataforma-aec",
-  "version": "0.1.0",
+  "name": "obratop",
+  "version": "4.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,15 +16,13 @@
     "test:e2e:ui": "node tests/e2e/ui.e2e.cjs",
     "emuladores": "firebase emulators:start --project demo-aec --only auth,firestore,storage,functions",
     "test:obratop": "node --test tests/obratop-original/calc.test.mjs tests/obratop-original/msproject.test.mjs tests/obratop-original/orcamento.test.mjs && node tests/obratop-original/economics.test.mjs",
-    "test:migracao": "firebase emulators:exec --only firestore --project demo-aec \"node tests/e2e/migracao.e2e.mjs\"",
-    "test:empresa": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/empresa.e2e.mjs\"",
-    "empresa:criar": "node scripts/criar-empresa.mjs",
     "regras:mesclar": "node scripts/mesclar-regras.mjs",
     "test:e2e:offline": "node tests/e2e/offline.e2e.cjs",
     "deploy": "node scripts/deploy.mjs",
     "instalar": "node scripts/instalar.mjs",
-    "usuarios": "node scripts/usuarios.mjs",
-    "test:instalador": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/instalador.e2e.mjs\""
+    "test:instalador": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/instalador.e2e.mjs\"",
+    "test:e2e:integracoes": "node tests/e2e/integracoes.e2e.cjs",
+    "regras:gerar": "node scripts/gerar-regras.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",
@@ -34,6 +32,7 @@
     "lucide-react": "^0.400.0",
     "next": "^14.2.5",
     "next-themes": "^0.3.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.4.0"
@@ -41,6 +40,7 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
     "@types/node": "^20.14.10",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",

@@ -1,222 +1,99 @@
-# Plataforma AEC — Gestão Integrada de Projetos, CAD/QTO e Orçamento CUB
+# ObraTop 4 — gestão de obras, projetos e orçamento
 
-SaaS B2B multi-tenant para escritórios de arquitetura e engenharia: briefing paramétrico, importação
-de CAD, BIM e redes com extração de quantitativos, orçamento pelo CUB estadual (NBR 12721) ou por
-composições SINAPI/SICRO/ORSE, contratos com variáveis dinâmicas, PDF vetorial e assinatura digital.
+Nova versão do ObraTop. Usa **os mesmos dados e os mesmos usuários** do ObraTop 3
+(`organizations/{org}/…`, `members`, `invites`) e acrescenta, em um layout por áreas:
+projetos e briefing, CAD/BIM com versões, quantitativos de qualquer software de engenharia,
+orçamento pelo CUB (NBR 12721), composições SINAPI/ORSE e cotações (Quantifik), contratos com
+assinatura digital, conciliação bancária, Pix, notas fiscais de compra e conferência para o eSocial.
 
-**Tipologias:** residencial, comercial, industrial, condomínio horizontal e vertical, loteamento,
-infraestrutura viária, topografia, saneamento (esgoto e drenagem) e redes de abastecimento de água.
-
-**Stack:** Next.js 14 (App Router, exportação estática) · TypeScript · Tailwind + componentes no padrão
-shadcn/ui · Firebase (Auth, Firestore, Storage, Functions 2ª geração, Hosting) · PowerShell.
+Next.js 14 (exportação estática) + TypeScript + Tailwind · Firebase (Auth, Firestore, Storage,
+Functions) · funciona instalado no celular e sem internet.
 
 ## Instalar sem programar
 
-No Windows, dê dois cliques em **`INSTALAR.cmd`** (instruções em linguagem simples no
-`LEIA-ME.txt`). Ele guia o download da chave de acesso, preserva as regras de segurança que já
-estão no ar, publica em um endereço próprio, cria a empresa e o primeiro Sócio-Diretor e, se
-encontrar o ObraTop no mesmo projeto, simula e oferece a migração dos dados. Pode ser executado
-de novo a qualquer momento. **`USUARIOS.cmd`** dá acesso às demais pessoas da equipe.
+`INSTALAR.cmd` (dois cliques, Windows) ou `npm run instalar`. Passo a passo em `LEIA-ME.txt`.
+O instalador localiza a chave de acesso, guarda cópia das regras que estão no ar, mantém as
+regras do ObraTop e acrescenta as dos módulos novos, publica em **endereço próprio** (o ObraTop
+atual continua no ar) e autoriza o endereço para login. Pode ser repetido; nada é duplicado.
+Em servidor/CI: `FIREBASE_SERVICE_ACCOUNT_JSON='<conteúdo da chave>' npm run instalar -- --sim`.
 
-## Começar
+## Áreas do aplicativo
 
-```powershell
-# Modo demonstração (sem Firebase): dados fictícios em memória
-npm install
-npm run dev            # http://localhost:3000
-
-# Ambiente completo + deploy
-.\scripts\setup-deploy.ps1 -ProjectId <id-do-projeto-firebase>
-```
-
-### Publicar sem derrubar outro aplicativo
-
-Um projeto Firebase tem **um** arquivo de regras do Firestore, **um** do Storage e, por site de
-Hosting, **um** aplicativo. Publicar a plataforma "por cima" de um projeto que já tem outro
-aplicativo (como o ObraTop em `obratop-v3-teste`) apagaria as regras e o site dele. Por isso a
-publicação exige dizer em que situação o projeto está:
-
-```bash
-# projeto só da plataforma (recomendado)
-node scripts/deploy.mjs --projeto meu-projeto --projeto-novo
-
-# projeto que já tem o ObraTop: regras mescladas + site de Hosting próprio
-node scripts/deploy.mjs --projeto obratop-v3-teste --compartilhado-com ../ObraTop --site plataforma-aec-xyz
-
-# acrescente --simular para ver os comandos sem executar nada
-```
-
-No Windows, `setup-deploy.ps1` aceita `-ProjetoNovo` ou `-CompartilhadoCom <pasta> -HostingSite <site>`
-e chama esse mesmo script. Em projeto compartilhado as regras dos dois aplicativos são unidas por
-`scripts/mesclar-regras.mjs` (que recusa a mescla se houver função ou caminho repetido), nada é
-publicado com `--force` além das funções da própria plataforma, e o site padrão não é tocado.
-As Cloud Functions e o Storage exigem o plano Blaze do Firebase.
-
-### Primeira empresa
-
-Pelas regras de segurança, só o backend cria empresas e atribui papéis. Depois do deploy:
-
-```bash
-# 1. a pessoa entra uma vez no aplicativo (cria a conta) e vê "Conta ainda sem empresa vinculada"
-# 2. um administrador do projeto Firebase roda:
-node scripts/criar-empresa.mjs --projeto <id-firebase> --tenant minha-empresa --nome "Minha Empresa" \
-  --razao "Minha Empresa Ltda." --cnpj 00.000.000/0001-00 --uf BA \
-  --rt "Eng. Fulano" --conselho CREA --registro "CREA-BA 12345" --socio email@empresa.com
-# 3. a pessoa sai e entra de novo: já é Sócio-Diretor e atribui os demais papéis pelo aplicativo
-```
-
-Rodar de novo com outro `--socio` acrescenta um sócio sem alterar o cadastro da empresa.
-
-Sem `.env.local` o app sobe em **modo demonstração**; com as variáveis `NEXT_PUBLIC_FIREBASE_*`
-(geradas pelo `setup-deploy.ps1`) ele usa Auth/Firestore/Storage reais.
-
-| Comando | O que faz |
+| Área | Telas |
 |---|---|
-| `npm test` | Testes dos motores (CUB, cronograma, DXF, Civil 3D, contratos, hash) |
-| `npm run test:rules` | Testes das regras do Firestore no emulador (requer Java) |
-| `npm run typecheck` / `npm run build` | Checagem de tipos / build estático em `out/` |
-| `scripts/setup-deploy.ps1` | Pré-requisitos, dependências, `.env.local`, testes, build e deploy |
-| `scripts/criar-empresa.mjs` | Cria a empresa (tenant) e o primeiro Sócio-Diretor — primeiro passo de uma instalação |
-| `scripts/migrar-obratop.mjs` | Copia uma organização do ObraTop para a plataforma (simulação por padrão) |
-| `scripts/import-cub.ps1` | Importa o CUB mensal (CSV) para `cubTables` — `-Simular` só valida |
-| `scripts/sync-cad.ps1` | Monitora a pasta local de CAD e envia cada arquivo salvo |
-| `scripts/backup.ps1` | Exporta o Firestore e sincroniza o Storage para um bucket de backup |
+| Comercial | Briefing · Cotações · Propostas e contratos |
+| Engenharia e Arquitetura | Projetos (Kanban, Gantt, ART/RRT, horas) · CAD e revisões · BIM e quantitativos |
+| Orçamento | Serviços e composições · Orçamento pelo CUB · Orçamento da obra · Orçamento analítico |
+| Planejamento e Obras | Obras · Cronograma (Gantt, caminho crítico, linha de base, MS Project) · Diário · Medições |
+| Suprimentos | Compras · Estoque · Fornecedores · Equipamentos |
+| Financeiro | Lançamentos · Contratos de obra · Bancos e Pix · Notas fiscais e CNPJ |
+| Recursos Humanos | Pessoal · Horas técnicas · eSocial |
+| Qualidade e Segurança | Qualidade · Segurança do trabalho · Documentos |
+| Fiscal e Integrações | Bancos e Pix · Notas fiscais e CNPJ · eSocial |
+| Administrativo | Empresa e equipe (convites, obra e perfil de cada pessoa) · Documentos |
 
-## Uso sem internet
+Início com saudação, números de cada área, central de pendências, avanço das obras e fluxo de
+caixa; busca rápida com **Ctrl+K**; tema claro e escuro; menu em gaveta no celular.
+O mapa das áreas fica em `src/lib/modulos.ts`; os indicadores, em `src/lib/indicadores.ts`.
 
-A plataforma é instalável (PWA) e abre offline:
+## Dados, usuários e segurança
 
-- `scripts/gerar-sw.mjs` roda no fim do build e gera o service worker com a lista de arquivos
-  daquela versão; todas as telas ficam disponíveis sem internet, mesmo as ainda não visitadas.
-- As bases de preços e composições (SINAPI, ORSE) ficam em cache depois do primeiro uso.
-- O Firestore usa cache local persistente: os dados já vistos abrem offline, e o que for lançado
-  sem conexão aparece na hora e sobe sozinho quando ela volta (`npm run test:e2e:offline`).
-- Precisam de internet: entrar pela primeira vez no aparelho, enviar arquivos (CAD, anexos),
-  assinatura de contrato e tudo o que ainda não foi aberto naquele aparelho.
+- **Empresa e pessoas**: `organizations/{org}` (campos novos em `aec`), `members/{uid}`
+  (`owner` ou `project_user` com `workId`), `invites/{code}`, `users/{uid}.currentOrg` —
+  exatamente como o ObraTop 3. Proprietário grava tudo; usuário de obra grava só na sua obra,
+  não cria obras nem fornecedores e não exclui (exclusão é lógica: `deleted: true`).
+- **Perfis dos módulos novos** (Coordenador, Orçamentista, Projetista):
+  `organizations/{org}/perfis/{uid}`, que só o proprietário grava — ninguém se promove.
+- **Regras** = regras do ObraTop + extensão. `regras/obratop-base.*` é a cópia das regras do
+  ObraTop 3.39.13; `regras/extensao-*.rules` são os módulos novos; `npm run regras:gerar`
+  produz `firestore.rules` e `storage.rules`. Na publicação, a base é **o que está no ar**
+  (`regrasParaPublicar`), então nenhuma regra do ObraTop se perde.
+- **Functions** (`functions/src`): versão e quantitativos a cada upload de CAD, trilha de
+  auditoria imutável, notificações com webhook assinado (HMAC), assinatura digital (Clicksign),
+  alertas diários de ART/RRT. Exigem o plano Blaze.
 
-## Qualidade medida
+## Integrações (Fiscal e Integrações)
 
-Lighthouse 12 no build de produção (modo demonstração, perfil móvel), nas nove telas:
-acessibilidade 100, boas práticas 100 e SEO 100 em todas; desempenho de 79 a 98
-(as mais pesadas são Gestão de obras e Serviços & Cotações, que carrega 10 mil composições).
+| Tela | O que funciona hoje | O que depende da empresa |
+|---|---|---|
+| Bancos e Pix | Extrato OFX → conciliação com o financeiro (baixa com data e referência do banco, sem duplicar); lançamento do que não tem par; Pix copia e cola + QR Code (BR Code estático, CRC conferido) | Extrato automático e boletos: contrato de API com o banco e certificado |
+| Notas fiscais e CNPJ | XML de NF-e (modelo 55) → fornecedor + contas a pagar pelas duplicatas (idempotente); validação da chave; consulta pública de CNPJ | Emissão de NF-e/NFS-e, busca na SEFAZ e manifestação: certificado e-CNPJ A1 e serviço emissor |
+| eSocial | Conferência dos dados de admissão (CPF, CBO, datas, salário) e planilha para a contabilidade | Transmissão dos eventos: certificado digital, pelo sistema de folha |
 
-## Testes de ponta a ponta (emuladores)
+Os arquivos são lidos no navegador; nada é enviado a terceiros (exceto a consulta de CNPJ, à BrasilAPI).
 
-Exercitam Cloud Functions, regras e a interface em modo Firebase real, sem tocar em nenhum projeto
-de produção (projeto fictício `demo-aec`). Requer Java para os emuladores.
+## Desenvolvimento
 
 ```bash
-# 1. segredos e parâmetros locais das Functions (valores de teste)
+npm install && npm --prefix functions install
+npm run dev            # sem .env.local abre em modo demonstração (dados fictícios em memória)
+npm run build          # exportação estática em out/ + service worker
+```
+
+## Testes
+
+```bash
+npm run typecheck && npm run lint
+npm test                  # 80 testes de unidade (motores de cálculo, importadores, integrações, instalador)
+npm run test:obratop      # testes originais dos módulos de cálculo do ObraTop (34)
+npm run test:rules        # 20 testes das regras de segurança no emulador
+npm run test:instalador   # reconhecimento do ObraTop existente (4)
+
+# ponta a ponta, com o Firebase Emulator Suite
 printf 'CLICKSIGN_TOKEN=token-teste\nCLICKSIGN_HMAC_SECRET=hmac-teste\nWEBHOOK_SIGNING_KEY=chave-webhook-teste\nAPS_CLIENT_ID=\nAPS_CLIENT_SECRET=\n' > functions/.secret.local
 printf 'CLICKSIGN_BASE_URL=http://127.0.0.1:4180\nAPS_BUCKET=\n' > functions/.env.local
 node scripts/sync-shared.mjs && npm --prefix functions run build
-
-# 2. emuladores (deixe rodando em outro terminal)
-npm run emuladores
-
-# 3. backend: RBAC, upload→versão→quantitativos, auditoria, webhook, assinatura, alertas
-npm run test:e2e:backend
-
-# 4. interface: compile apontando para os emuladores, sirva em :4173 e rode
+npm run emuladores &      # deixe rodando
+npm run test:e2e:backend  # 45: papéis, upload→versão→quantitativos, auditoria, webhook, assinatura, alertas
 NEXT_PUBLIC_FIREBASE_API_KEY=demo NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-aec \
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-aec.appspot.com NEXT_PUBLIC_USE_EMULATORS=1 npm run build
 npx serve out -l 4173 &
-npm run test:e2e:ui
+npm run test:e2e:ui           # 73: todas as áreas, convite → conta → empresa, papéis
+npm run test:e2e:integracoes  # 21: OFX, Pix, NF-e, CNPJ (resposta simulada), eSocial
+npm run test:e2e:offline      # 5: lançar sem internet e sincronizar
 ```
 
-O teste de interface espera a base SINAPI-BA no catálogo de preços (o padrão público serve).
-Os provedores externos (Clicksign e o destino do webhook) são simulados por servidores locais
-dentro dos próprios testes.
-
-Limite do emulador: o gatilho de auditoria recebe um autor fictício, então o `uid` real no log
-só pode ser conferido em um projeto Firebase de verdade.
-
-## Arquitetura de pastas
-
-```
-plataforma-aec/
-├─ firebase.json · firestore.rules · firestore.indexes.json · storage.rules
-├─ scripts/
-│  ├─ setup-deploy.ps1 · backup.ps1 · sync-cad.ps1 · import-cub.ps1
-│  ├─ import-cub.mjs           validação + gravação do CUB (Admin SDK)
-│  └─ sync-shared.mjs          copia src/lib/{cad,cub} → functions/src/shared (predeploy)
-├─ functions/src/
-│  ├─ index.ts                 upload CAD→QTO, auditoria, notificações, RBAC, assinatura, alertas ART
-│  └─ aps.ts                   Autodesk Platform Services (conversão de DWG)
-├─ src/
-│  ├─ lib/
-│  │  ├─ types.ts              schema tipado do Firestore
-│  │  ├─ cub/engine.ts         NBR 12721 + CUB + padrões + BDI + what-if
-│  │  ├─ cub/schedule.ts       Curva S, cronograma físico-financeiro, Curva ABC
-│  │  ├─ cad/dxf-qto.ts        parser DXF + quantitativos por camada
-│  │  ├─ cad/civil3d.ts        volumes de corte/aterro (CSV e LandXML)
-│  │  ├─ import/               importador universal: ifc, redes (.inp), landxml, tabelas, exemplos
-│  │  ├─ obratop/              esquemas.ts (15 módulos) · vendor/ (cálculos originais do ObraTop)
-│  │  ├─ composicoes/          motor.ts (Quantifik), tabelas.ts, fonte.ts (SINAPI e ORSE analíticos)
-│  │  ├─ orcamento/            analitico.ts (vínculos, busca, cálculo) · bases.ts (catálogo de preços)
-│  │  ├─ urbanismo/quadro.ts   quadro de áreas de loteamento
-│  │  ├─ briefing/scope.ts     briefing → escopo e entregáveis
-│  │  ├─ contracts/template.ts variáveis e cláusulas condicionais
-│  │  ├─ signature/hash.ts     SHA-256 e envelope de assinatura
-│  │  └─ rbac.ts · format.ts · demo-data.ts · firebase/client.ts
-│  ├─ hooks/                   use-auth (claims), use-colecao (onSnapshot), use-workspace
-│  ├─ components/              ui/ · layout/ · dashboard/ · budget/ · cad/ · contracts/
-│  └─ app/(app)/               dashboard · briefing · cad · quantitativos · composicoes · orcamento · contratos · gestao
-├─ tests/core.test.ts · tests/importacao.test.ts · tests/rules/firestore.rules.test.ts
-└─ data/cub-modelo.csv
-```
-
-Os motores em `src/lib/{cub,cad}` são TypeScript puro, sem dependências: o mesmo código roda no
-navegador (resposta instantânea), nas Cloud Functions (resultado oficial) e nos testes.
-
-## Schema do Firestore
-
-```
-cubTables/{UF}_{AAAA-MM}                  global · leitura autenticada · escrita só Admin SDK
-signatureRequests/{documentKey}            índice provedor→contrato · só backend
-tenants/{tenantId}                         razão social, CNPJ, branding, RT (CREA/CAU), webhookUrl, custoHoraTecnica
- ├─ members/{uid}                          nome, email, role, projectIds          (escrita: função definirPapel)
- ├─ clients/{clientId}
- ├─ cubOverrides/{UF}_{AAAA-MM}            ajustes do tenant sobre o CUB oficial   (auditado)
- ├─ works, activities, measurements, budgets, finance, contracts, orders, inventory, suppliers,
- │  dailyLogs, quality, safety, staff, equipment, documents     módulos de obra (campos do ObraTop)
- ├─ cotacoes/{id}                          numero, cliente, obra, bdi, itens[] (serviço, quantidade, medidas)
- ├─ config/composicoes                     BDI, regime, horas, encargos, pisos, preços digitados
- ├─ vinculos/{id}                          chave do item, fonte, codigo, fator, estado=confirmado
- ├─ notifications/{id}                     tipo, titulo, mensagem, lidaPor[], destinatarios[]
- ├─ auditLogs/{id}                         acao, recurso, caminho, uid, antes, depois, em   (imutável)
- └─ projects/{projectId}                   codigo, nome, tipologia, status, disciplinas[], prazos, clienteUids[]
-     ├─ briefings/{id}                     entradas + escopo gerado
-     ├─ files/{fileId}                     nome, disciplina, revisaoAtual, totalRevisoes
-     │   └─ versions/{R00|R01|…}           storagePath, sha256, qtoStatus, qto        (imutável)
-     ├─ quantities/{arquivo}               formato, itens[], avisos, resumo, revisao
-     ├─ redlines/{id}                      pontos em coordenadas do desenho, autorUid
-     ├─ budgets/{id}                       entradas, resultado, status (rascunho→enviado→aprovado)
-     ├─ contracts/{id}                     template, variaveis, status, sha256, assinatura
-     ├─ artRrt/{id}                        tipo, disciplina, etapa, status, vencimento, tenantId
-     └─ timesheets/{id}                    uid, disciplina, inicio, minutos, tenantId
-```
-
-Storage: `tenants/{t}/projects/{p}/cad/{disciplina}/{carimbo}__{arquivo}` (objetos imutáveis; a
-revisão é atribuída em transação pela função `processarUploadCad`) e `…/docs/{codigo}.pdf`.
-
-### Segurança multi-tenant
-
-- `tenantId` e `role` vivem em **custom claims** do token, gravadas apenas pela função `definirPapel`
-  (só o Sócio-Diretor chama; um usuário não pode ser movido de outro tenant).
-- Toda regra compara `request.auth.token.tenantId` com o `{tenantId}` do caminho.
-- Campos sensíveis (status/hash/assinatura de contrato, revisões de CAD, papéis, auditoria, CUB
-  oficial) só são gravados pelo backend.
-- Cliente final (Portal): lê apenas projetos em que está em `clienteUids`, orçamentos enviados e
-  contratos em assinatura; a única escrita permitida é aprovar um orçamento enviado.
-
-| Papel | Projetos | CAD | Orçamento | Contratos | Horas | Auditoria/Equipe |
-|---|---|---|---|---|---|---|
-| Sócio-Diretor | editar/excluir | enviar/excluir | editar/aprovar | editar/enviar | todas | sim |
-| Coordenador | editar | enviar/excluir | editar | editar/enviar | todas | — |
-| Orçamentista | ler | enviar | editar | ler | próprias | — |
-| Projetista | ler | enviar | ler | — | próprias | — |
-| Cliente | os seus | ler | ler enviados/aprovar | ler os seus | — | — |
+Clicksign, o destino do webhook e a consulta de CNPJ são simulados por servidores locais nos testes.
 
 ## Importação universal e orçamento analítico
 
@@ -283,11 +160,9 @@ qualidade, segurança, pessoal e documentos.
   saldo de contrato, avanço ponderado, valor agregado (IDP/IDC), fluxo de caixa projetado,
   caminho crítico e leitura/escrita do XML do MS Project vêm deles. `npm run test:obratop`
   roda os testes do próprio ObraTop contra essas cópias.
-- **Mesmos dados.** Os registros ficam em `tenants/{t}/{coleção}` com os mesmos nomes de coleção
-  e de campo do ObraTop (`organizations/{org}/{coleção}`), inclusive a exclusão lógica (`deleted`).
-- **Migração.** `scripts/migrar-obratop.mjs` copia uma organização do ObraTop para um tenant,
-  preservando ids e referências. Sem `--gravar` é só simulação; a origem nunca é alterada; nada
-  é sobrescrito sem `--sobrescrever`; pode ser repetida. `npm run test:migracao` testa no emulador.
+- **Mesmos dados.** Os registros ficam em `organizations/{org}/{coleção}`, com os mesmos nomes de
+  coleção e de campo do ObraTop 3, inclusive a exclusão lógica (`deleted`). Não há migração nem
+  cópia: os dois aplicativos leem e gravam os mesmos documentos.
 
 - **Linha de base.** Congelar e replanejar gravam `baseline` e `baselineHistory` na obra, no
   mesmo formato do ObraTop; o avanço planejado e o Gantt passam a comparar com ela.
@@ -338,25 +213,12 @@ preenchido automaticamente (regras em `REGRAS_CAMADAS_PADRAO`, customizáveis):
 
 ## Limites conhecidos
 
-- **CUB:** o repositório não traz valores oficiais. As tabelas do modo demo e `data/cub-modelo.csv`
-  são ilustrativas; importe a planilha do Sinduscon do seu estado todo mês.
-- **IFC do Revit:** o exportador grava quantidades repetidas e, às vezes, em mm²/mm³; o leitor
-  normaliza e avisa. Quando o próprio modelo traz área líquida maior que a bruta, o leitor só
-  avisa — não há como saber qual valor é o certo.
-- **Sugestões de composição:** vêm de semelhança de texto e erram com frequência em serviços
-  parecidos (tubo predial × rede coletora, fornecimento × assentamento). Por isso ficam fora do
-  total até serem confirmadas. Itens como "nó de rede" ou "área de parcelas" não têm composição
-  direta e servem de conferência.
-- **IFC:** lê quantidades gravadas no modelo, não calcula geometria. Sem *Base Quantities* só há
-  contagem. Arquivos muito grandes (centenas de MB) são lidos inteiros em memória.
-- **Pontos topográficos:** a área é a da envoltória convexa, que superestima perímetros côncavos.
-- **Quadro urbanístico** (`urbanismo/quadro.ts`): motor pronto e testado, ainda sem tela.
-- **Portal do Cliente:** o cliente vê o andamento dos próprios projetos; aprovar orçamento e ver
-  contratos pela interface ainda não existe (as regras já permitem).
-- **DWG:** é binário proprietário. A plataforma armazena e versiona; os quantitativos saem do DXF
-  (`sync-cad.ps1 -ConverterDxf` gera via AutoCAD) ou da conversão APS, que exige credenciais Autodesk.
-- **Visualizador:** Canvas 2D do model space (linhas, polilinhas, arcos, círculos, elipses,
-  hachuras, textos; blocos aparecem como marcadores). Sem 3D.
-- **Assinatura:** integração implementada para Clicksign (API v1). DocuSign e Gov.br estão previstos
-  no tipo `ProvedorAssinatura`, sem adaptador.
-- **Modelo de contrato:** ponto de partida; precisa de revisão jurídica do escritório.
+- **Nada foi publicado no Firebase real por este repositório**: os testes rodam no emulador.
+  A publicação é feita pelo instalador, com a chave do dono do projeto.
+- Não verificados em ambiente real: Clicksign e Autodesk APS (conversão de DWG) com credenciais
+  de produção; scripts PowerShell (`scripts/*.ps1`); `INSTALAR.cmd` em Windows.
+- No emulador, o autor gravado na trilha de auditoria é fictício (limitação do emulador).
+- Sugestões automáticas de composição não entram no total até serem confirmadas.
+- Ainda não trazidos do ObraTop 3: análise econômica, modelos de obra, pontos de restauração e
+  parte dos relatórios em PDF. O ObraTop 3 continua no ar e usa os mesmos dados.
+- Transmissão oficial (SEFAZ, eSocial, API bancária) depende de certificado digital e contratos.

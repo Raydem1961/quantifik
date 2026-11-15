@@ -2,6 +2,7 @@
  * Indicadores das áreas e central de pendências. Funções puras sobre os registros do ObraTop;
  * os cálculos de avanço, caixa e contrato são os módulos originais (vendor/calc.mjs).
  */
+import { conferir, type Pessoa } from './integracoes/esocial';
 import { budgetSale, cashProjection, contractBalance, incurredCost, measurementNet, schedulePerformance } from './obratop/vendor/calc.mjs';
 
 export type Reg = { id: string; deleted?: boolean } & Record<string, unknown>;
@@ -89,6 +90,13 @@ export function kpisDaArea(area: string, d: Dados, hoje: string): Kpi[] {
       const b = vivos(d.budgets), venda = b.reduce((s, x) => s + budgetSale(x), 0), custo = b.reduce((s, x) => s + n(x.qty) * n(x.unitValue), 0);
       return [{ rotulo: 'Orçado nas obras', valor: brl(venda), detalhe: `${b.length} itens` }, { rotulo: 'Custo direto', valor: brl(custo) }, { rotulo: 'BDI médio', valor: custo > 0 ? `${((venda / custo - 1) * 100).toFixed(1)}%` : '—' },
         { rotulo: 'Custo incorrido', valor: brl(incurredCost(vivos(d.finance), hoje)), detalhe: 'despesas por competência' }];
+    }
+    case 'integracoes': {
+      const f = vivos(d.finance), abertas = f.filter((x) => !x.bankRef && !['Pago', 'Recebido'].includes(String(x.status)));
+      const notas = new Set(f.filter((x) => x.nfeKey).map((x) => String(x.nfeKey))).size;
+      const incompletas = conferir(d.staff as Pessoa[]).filter((c) => c.pendencias.length > 0).length;
+      return [{ rotulo: 'Contas em aberto', valor: String(abertas.length), detalhe: 'aguardando baixa pelo extrato' }, { rotulo: 'Conciliadas com o banco', valor: String(f.filter((x) => x.bankRef).length) },
+        { rotulo: 'Notas fiscais lançadas', valor: String(notas) }, { rotulo: 'Cadastros incompletos (eSocial)', valor: String(incompletas), alerta: incompletas > 0 }];
     }
     default:
       return [{ rotulo: 'Obras em andamento', valor: String(ativas.length) }, { rotulo: 'Carteira de obras', valor: brl(ativas.reduce((s, w) => s + n(w.value), 0)) },

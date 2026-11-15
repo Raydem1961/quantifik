@@ -8,17 +8,16 @@
 // Pode ser executado de novo a qualquer momento: atualiza o que mudou e não duplica nada.
 //
 // Uso sem perguntas (automação): node scripts/instalar.mjs --sim [--socio email] [--empresa "Nome"]
-//                                [--site id] [--sem-migrar] [--sem-publicar]
+//                                [--site id] [--sem-publicar]
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { criarEmpresa } from './criar-empresa.mjs';
 import { prepararCredencial } from './deploy.mjs';
-import { combinarComAoVivo } from './mesclar-regras.mjs';
-import { COLECOES_OBRATOP, migrar } from './migrar-obratop.mjs';
+import { regrasParaPublicar } from './gerar-regras.mjs';
+const COLECOES_OBRATOP = ['works', 'activities', 'budgets', 'measurements', 'finance', 'contracts', 'orders', 'inventory', 'suppliers', 'staff', 'equipment', 'quality', 'safety', 'documents', 'dailyLogs'];
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -130,7 +129,7 @@ async function principal() {
   };
   const confirmar = async (texto) => SEM_PERGUNTAS || /^s/i.test(await perguntar(`${texto} (S/N)`, 'S'));
 
-  console.log('\n  PLATAFORMA AEC — instalação e publicação\n  Pode fechar esta janela a qualquer momento; nada fica pela metade de forma irreversível.');
+  console.log('\n  OBRATOP 4 — instalação e publicação\n  Pode fechar esta janela a qualquer momento; nada fica pela metade de forma irreversível.');
 
   // 1 ── chave de acesso ────────────────────────────────────────────────────
   titulo('1. Acesso ao Firebase');
@@ -175,24 +174,21 @@ async function principal() {
   // 3 ── regras de segurança: preserva o que está no ar ──────────────────────
   titulo('3. Regras de segurança');
   const aoVivo = async (ler) => { try { return (await ler())?.source?.[0]?.content ?? ''; } catch { return ''; } };
-  const pares = [
-    ['firestore.rules', 'match /databases/{database}/documents', await aoVivo(() => regrasApi.getFirestoreRuleset())],
-    ['storage.rules', 'match /b/{bucket}/o', await aoVivo(() => regrasApi.getStorageRuleset())],
-  ];
+  const vivoFirestore = await aoVivo(() => regrasApi.getFirestoreRuleset()), vivoStorage = await aoVivo(() => regrasApi.getStorageRuleset());
   mkdirSync(join(raiz, '.regras-mescladas'), { recursive: true });
   mkdirSync(join(raiz, 'backups'), { recursive: true });
-  let compartilhado = false;
   const carimbo = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  for (const [arquivo, raizRegra, vivo] of pares) {
-    if (vivo.trim()) writeFileSync(join(raiz, 'backups', `${arquivo}.${projectId}.${carimbo}.antes`), vivo); // cópia do que estava no ar
-    const r = combinarComAoVivo(readFileSync(join(raiz, arquivo), 'utf8'), vivo, raizRegra);
-    writeFileSync(join(raiz, '.regras-mescladas', arquivo), r.regras);
-    if (r.modo === 'compartilhado') compartilhado = true;
-  }
-  ok(compartilhado
-    ? 'O projeto já tem outro aplicativo: as regras dele foram mantidas e as da plataforma, acrescentadas.'
-    : 'Projeto sem outro aplicativo: serão usadas as regras da plataforma.');
-  ok('Cópia das regras que estavam no ar guardada na pasta "backups".');
+  // Cópia do que estava no ar, antes de qualquer mudança.
+  if (vivoFirestore.trim()) writeFileSync(join(raiz, 'backups', `firestore.rules.${projectId}.${carimbo}.antes`), vivoFirestore);
+  if (vivoStorage.trim()) writeFileSync(join(raiz, 'backups', `storage.rules.${projectId}.${carimbo}.antes`), vivoStorage);
+  // As regras do ObraTop que estão no ar são a base; os módulos novos entram como um bloco a mais.
+  const regras = regrasParaPublicar(vivoFirestore, vivoStorage);
+  writeFileSync(join(raiz, '.regras-mescladas', 'firestore.rules'), regras.firestore);
+  writeFileSync(join(raiz, '.regras-mescladas', 'storage.rules'), regras.storage);
+  ok(regras.baseDoFirestore === 'no ar'
+    ? 'As regras do ObraTop que estão no ar foram mantidas; as dos módulos novos foram acrescentadas.'
+    : 'Projeto sem o ObraTop: serão usadas as regras do ObraTop 3.39.13 com os módulos novos.');
+  if (vivoFirestore.trim()) ok('Cópia das regras que estavam no ar guardada na pasta "backups".');
   const cfgFirebase = JSON.parse(readFileSync(join(raiz, 'firebase.json'), 'utf8'));
   cfgFirebase.firestore.rules = '.regras-mescladas/firestore.rules';
   cfgFirebase.storage.rules = '.regras-mescladas/storage.rules';
@@ -204,7 +200,7 @@ async function principal() {
   const json = (r) => { try { return JSON.parse(r.stdout); } catch { return null; } };
   let apps = json(firebase(['apps:list', 'WEB', '--project', projectId, '--json'], { capturar: true }))?.result ?? [];
   if (!apps.length) {
-    firebase(['apps:create', 'WEB', 'Plataforma AEC', '--project', projectId, '--json'], { capturar: true });
+    firebase(['apps:create', 'WEB', 'ObraTop 4', '--project', projectId, '--json'], { capturar: true });
     apps = json(firebase(['apps:list', 'WEB', '--project', projectId, '--json'], { capturar: true }))?.result ?? [];
   }
   if (!apps.length) throw new Error('Não foi possível obter o aplicativo Web do projeto Firebase.');
@@ -239,43 +235,18 @@ async function principal() {
     } catch { aviso(`Não consegui autorizar o endereço para login com Google. Se o botão "Entrar com Google" falhar, adicione ${site}.web.app em Authentication → Configurações → Domínios autorizados. O login por e-mail e senha funciona de qualquer forma.`); }
   }
 
-  // 6 ── empresa e primeiro sócio ───────────────────────────────────────────
-  titulo('6. Empresa e primeiro Sócio-Diretor');
+  // 6 ── empresa e usuários: os mesmos do ObraTop ──────────────────────────
+  titulo('6. Empresa e usuários');
   let orgs = [];
   try { orgs = await organizacoesObraTop(db); } catch { /* projeto sem ObraTop */ }
   const org = orgs[0];
-  if (org) ok(`Encontrei o ObraTop neste projeto: "${org.nome}" (${org.registros} registros, ${org.membros} usuário(s)).`);
-  const nome = opcao('empresa') ?? await perguntar('Nome da empresa', org?.nome ?? 'Minha Empresa');
-  const socio = opcao('socio') ?? await perguntar('E-mail de quem será o Sócio-Diretor (administrador)', org?.donoEmail ?? '');
-  if (!/^\S+@\S+\.\S+$/.test(socio)) throw new Error('E-mail do Sócio-Diretor não informado.');
-  const tenant = idDeEmpresa(nome);
-  let senhaProvisoria = '';
-  try { await auth.getUserByEmail(socio); }
-  catch {
-    // Conta nova: cria com senha provisória (quem já usa o ObraTop entra com a senha de sempre).
-    senhaProvisoria = `Aec-${Math.random().toString(36).slice(2, 8)}${Math.floor(Math.random() * 90 + 10)}`;
-    await auth.createUser({ email: socio, password: senhaProvisoria, displayName: socio.split('@')[0] });
-  }
-  const emp = await criarEmpresa(db, auth, { tenant, nome, uf: opcao('uf') ?? 'BA', conselho: 'CREA', socio });
-  ok(`${emp.criada ? 'Empresa criada' : 'Empresa já existia'}: "${nome}". ${socio} é Sócio-Diretor.`);
-  if (emp.criada) aviso('CNPJ, responsável técnico e registro no CREA/CAU ficaram em branco: preencha-os depois, pois aparecem nos PDFs.');
-
-  // 7 ── migração do ObraTop ────────────────────────────────────────────────
-  if (org && !tem('sem-migrar')) {
-    titulo('7. Dados do ObraTop');
-    console.log('   Simulação (nada é gravado ainda):');
-    const sim = await migrar(db, db, { org: org.id, tenant, log: (m) => console.log(`     ${m}`) });
-    const aCopiar = Object.values(sim).reduce((s, x) => s + x.copiados, 0);
-    if (aCopiar === 0) ok('Nada novo para copiar: os dados já estão na plataforma.');
-    else if (await confirmar(`Copiar ${aCopiar} registros para a plataforma? O ObraTop não é alterado`)) {
-      await migrar(db, db, { org: org.id, tenant, gravar: true, log: () => {} });
-      ok(`${aCopiar} registros copiados. O ObraTop continua funcionando normalmente, com os dados dele intactos.`);
-    } else aviso('Migração adiada. Execute o instalador de novo quando quiser copiar os dados.');
-  }
+  if (org) ok(`ObraTop encontrado: "${org.nome}" (${org.registros} registros, ${org.membros} usuário(s)). O novo aplicativo usa esses mesmos dados e usuários — nada é copiado nem alterado.`);
+  else ok('Projeto sem empresa cadastrada: na primeira vez que abrir o aplicativo, crie sua conta e a empresa.');
+  const socio = org?.donoEmail ?? '';
 
   rl.close();
   titulo('Pronto');
-  console.log(`\n   Aplicativo:  ${endereco}\n   Entrar com:  ${socio}${senhaProvisoria ? `\n   Senha provisória: ${senhaProvisoria}   (troque depois em "Esqueci minha senha")` : '   (a mesma senha que você já usa)'}\n`);
+  console.log(`\n   Aplicativo:  ${endereco}\n   ${socio ? `Entrar com:  ${socio}   (a mesma senha do ObraTop)` : 'Primeiro acesso: clique em "Criar conta" e depois em "Criar minha empresa".'}\n`);
   if (!SEM_PERGUNTAS && !tem('sem-publicar')) abrirNoNavegador(`${endereco}/login/`);
 }
 

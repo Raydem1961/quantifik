@@ -16,7 +16,8 @@ const arquivos = [];
   }
 })(out);
 const urls = arquivos.map((p) => {
-  const u = `/${relative(out, p).split(sep).join('/')}`;
+  // Mesmo endereço que o navegador pede: o Next codifica cada trecho (ex.: [modulo] → %5Bmodulo%5D).
+  const u = `/${relative(out, p).split(sep).map(encodeURIComponent).join('/')}`;
   return u.endsWith('/index.html') ? u.slice(0, -'index.html'.length) : u; // páginas: /dashboard/
 }).sort();
 const versao = createHash('sha256').update(arquivos.sort().map((p) => readFileSync(p)).reduce((h, b) => h.update(b), createHash('sha256')).digest('hex')).digest('hex').slice(0, 12);
@@ -59,7 +60,7 @@ self.addEventListener('fetch', (e) => {
   }
   // Páginas e demais arquivos: rede primeiro (sempre a versão nova), cache quando não há rede.
   e.respondWith(fetch(req).then((n) => { if (n.ok) { const copia = n.clone(); caches.open(CACHE_APP).then((c) => c.put(req, copia)); } return n; })
-    .catch(async () => (await caches.match(req, { ignoreSearch: true })) || (req.mode === 'navigate' ? caches.match('/dashboard/') : Response.error())));
+    .catch(async () => (await caches.match(req, { ignoreSearch: true })) || (req.mode === 'navigate' ? caches.match('/inicio/') : Response.error())));
 });
 `;
 writeFileSync(join(out, 'sw.js'), sw);

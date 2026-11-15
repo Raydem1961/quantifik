@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { envLocal, idDeEmpresa, localizarChave, sitePadrao } from '../scripts/instalar.mjs';
 // @ts-expect-error módulo de script sem tipos
 import { combinarComAoVivo } from '../scripts/mesclar-regras.mjs';
+// @ts-expect-error módulo de script sem tipos
+import { bases, regrasParaPublicar } from '../scripts/gerar-regras.mjs';
+import { readFileSync } from 'node:fs';
 
 describe('instalador', () => {
   it('acha a chave mais recente em Downloads e ignora outros JSON', () => {
@@ -49,5 +52,26 @@ describe('instalador', () => {
     expect(m2.regras.match(/match \/tenants\/\{t\}/g)).toHaveLength(1);
     expect(m2.regras).toContain('allow read, write: if fa();');
     expect(combinarComAoVivo(platV2, m2.regras, raiz).regras).toBe(m2.regras);
+  });
+  it('regras a publicar: as do ObraTop no ar são a base, a extensão entra uma vez só', () => {
+    const b = bases();
+    // Projeto com o ObraTop no ar, com uma regra própria que não existe na cópia do repositório.
+    const noAr = b.firestore.replace('match /audits/{id} {', 'match /relatoriosDoCliente/{id} { allow read: if member(orgId); }\n      match /audits/{id} {');
+    const r = regrasParaPublicar(noAr, b.storage);
+    expect(r.baseDoFirestore).toBe('no ar');
+    expect(r.firestore).toContain('match /relatoriosDoCliente/{id}');
+    expect(r.firestore.match(/>>> EXTENSÃO ObraTop 4/g)).toHaveLength(2);
+    expect(r.firestore).toContain('match /perfis/{uid}');
+    // Reinstalar sobre o resultado não duplica nada.
+    const r2 = regrasParaPublicar(r.firestore, r.storage);
+    expect(r2.firestore).toBe(r.firestore);
+    expect(r2.storage).toBe(r.storage);
+    // Sem as extensões, sobra exatamente o que estava no ar.
+    expect(r.firestore.replace(/[ \t]*\/\/ >>> EXTENSÃO ObraTop 4[\s\S]*?\/\/ <<< EXTENSÃO ObraTop 4\n/g, '')).toBe(noAr);
+    // Projeto novo (ou regras de outro aplicativo): usa a cópia do ObraTop.
+    expect(regrasParaPublicar('', '').baseDoFirestore).toBe('cópia do ObraTop 3.39.13');
+    // Os arquivos do repositório são exatamente o que o gerador produz.
+    expect(readFileSync('firestore.rules', 'utf8')).toBe(regrasParaPublicar('', '').firestore);
+    expect(readFileSync('storage.rules', 'utf8')).toBe(regrasParaPublicar('', '').storage);
   });
 });

@@ -5,10 +5,10 @@
 import {
   BadgeDollarSign, Boxes, Briefcase, Building, Building2, CalendarRange, Calculator, ClipboardCheck, ClipboardList, Compass, FileSignature, FileText,
   FolderKanban, Gauge, Hammer, HardHat, Landmark, LayoutGrid, NotebookPen, Package, PenTool, Ruler, ScrollText, ShieldAlert, ShieldCheck, ShoppingCart,
-  Store, Truck, Users, UserCog, Wallet, Wrench, type LucideIcon,
+  Store, Truck, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, type LucideIcon,
 } from 'lucide-react';
 
-export type IdArea = 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
+export type IdArea = 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
 
 export interface Tela { href: string; rotulo: string; icone: LucideIcon; descricao: string; soDono?: boolean }
 export interface Area {
@@ -53,15 +53,23 @@ export const AREAS: Area[] = [
   { id: 'financeiro', nome: 'Financeiro', resumo: 'Caixa, contratos e resultado.', icone: Landmark, matiz: 150, telas: [
     { href: '/gestao/finance/', rotulo: 'Lançamentos', icone: Wallet, descricao: 'Receitas, despesas e fluxo de caixa projetado' },
     { href: '/gestao/contracts/', rotulo: 'Contratos de obra', icone: FileText, descricao: 'Valores, aditivos e saldo a medir' },
+    { href: '/integracoes/bancos/', rotulo: 'Bancos e Pix', icone: Banknote, descricao: 'Conciliação do extrato (OFX) e cobrança por Pix' },
+    { href: '/integracoes/fiscal/', rotulo: 'Notas fiscais e CNPJ', icone: Receipt, descricao: 'NF-e de compra vira fornecedor e contas a pagar' },
   ] },
   { id: 'rh', nome: 'Recursos Humanos', resumo: 'Pessoas, alocação e horas.', icone: Users, matiz: 292, telas: [
     { href: '/gestao/staff/', rotulo: 'Pessoal', icone: Users, descricao: 'Equipe, funções, salários e alocação por obra' },
     { href: '/dashboard/', rotulo: 'Horas técnicas', icone: ClipboardCheck, descricao: 'Cronômetro por disciplina e margem real' },
+    { href: '/integracoes/esocial/', rotulo: 'eSocial', icone: Contact, descricao: 'Conferência cadastral e planilha para a contabilidade' },
   ] },
   { id: 'qualidade', nome: 'Qualidade e Segurança', resumo: 'Conformidade, SST e documentos.', icone: ShieldCheck, matiz: 48, telas: [
     { href: '/gestao/quality/', rotulo: 'Qualidade', icone: ClipboardCheck, descricao: 'Não conformidades e planos de ação' },
     { href: '/gestao/safety/', rotulo: 'Segurança do trabalho', icone: ShieldAlert, descricao: 'DDS, inspeções, incidentes e treinamentos' },
     { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivos, revisões, vencimentos e aprovações' },
+  ] },
+  { id: 'integracoes', nome: 'Fiscal e Integrações', resumo: 'Bancos, notas fiscais e eSocial.', icone: Plug, matiz: 190, telas: [
+    { href: '/integracoes/bancos/', rotulo: 'Bancos e Pix', icone: Banknote, descricao: 'Conciliação do extrato (OFX) e cobrança por Pix' },
+    { href: '/integracoes/fiscal/', rotulo: 'Notas fiscais e CNPJ', icone: Receipt, descricao: 'NF-e de compra vira fornecedor e contas a pagar' },
+    { href: '/integracoes/esocial/', rotulo: 'eSocial', icone: Contact, descricao: 'Conferência cadastral e planilha para a contabilidade' },
   ] },
   { id: 'administrativo', nome: 'Administrativo', resumo: 'Empresa, equipe e acessos.', icone: Building, matiz: 222, telas: [
     { href: '/admin/', rotulo: 'Empresa e equipe', icone: UserCog, descricao: 'Dados da empresa, responsável técnico, usuários e convites', soDono: true },

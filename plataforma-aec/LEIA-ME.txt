@@ -1,41 +1,41 @@
-PLATAFORMA AEC — COMO COLOCAR NO AR
-====================================
+OBRATOP 4 — COMO COLOCAR NO AR (sem precisar programar)
+=========================================================
 
-Você NÃO precisa saber programar. São dois cliques e algumas perguntas.
+O QUE É
+  A nova versão do ObraTop: os mesmos dados e os mesmos usuários do ObraTop atual, com novo
+  visual por áreas (Comercial, Engenharia e Arquitetura, Orçamento, Planejamento e Obras,
+  Suprimentos, Financeiro, Recursos Humanos, Qualidade e Segurança, Fiscal e Integrações,
+  Administrativo) e os módulos novos: projetos, CAD/BIM, quantitativos, orçamento pelo CUB,
+  composições SINAPI/ORSE, cotações, contratos com assinatura digital, conciliação bancária,
+  Pix, notas fiscais e conferência para o eSocial.
 
-O QUE PRECISA TER NO COMPUTADOR
-  • Node.js (o mesmo que você já usa para publicar o ObraTop).
-    Se não tiver, o instalador abre o site para baixar.
+ANTES DE COMEÇAR
+  1. Instale o Node.js (versão LTS) em https://nodejs.org — "Avançar" até o fim.
+  2. Descompacte esta pasta em um local simples, por exemplo  C:\ObraTop4
 
-PASSO A PASSO
-  1. Dê dois cliques em  INSTALAR.cmd
-  2. Na primeira vez ele abre uma página do Firebase no navegador.
-     Clique no botão azul "Gerar nova chave privada" e depois em "Gerar chave".
-     Um arquivo é baixado sozinho — volte para a janela preta e aguarde.
-  3. Responda às perguntas (nome da empresa e seu e-mail). Para aceitar a
-     sugestão entre colchetes, só aperte Enter.
-  4. Se ele encontrar os dados do ObraTop, mostra quantos registros existem e
-     pergunta se pode copiar. O ObraTop NÃO é alterado.
-  5. No fim aparece o endereço do aplicativo e ele abre no navegador.
-     Entre com o mesmo e-mail e senha que você usa no ObraTop.
+INSTALAR E PUBLICAR
+  Dois cliques em  INSTALAR.cmd  e siga a tela. O instalador:
+    • abre a página do Firebase para você baixar a chave de acesso (um clique em
+      "Gerar nova chave privada"); ele encontra o arquivo sozinho na pasta Downloads;
+    • guarda uma cópia das regras de segurança que estão no ar (pasta "backups");
+    • mantém as regras do ObraTop atual e acrescenta as dos módulos novos;
+    • publica o novo aplicativo em um ENDEREÇO PRÓPRIO — o ObraTop atual continua no ar,
+      no endereço de sempre, sem nenhuma alteração;
+    • mostra o endereço no final e abre o aplicativo.
+  Pode executar de novo quando quiser (por exemplo, para atualizar): nada é duplicado.
 
-O QUE O INSTALADOR FAZ (E O QUE ELE NÃO FAZ)
-  • Publica a plataforma em um endereço NOVO. O endereço do ObraTop continua
-    igual, com o ObraTop funcionando.
-  • Mantém as regras de segurança do ObraTop e acrescenta as da plataforma.
-    Antes de qualquer mudança, guarda uma cópia das regras atuais na pasta
-    "backups".
-  • Não apaga nada. Pode ser executado quantas vezes quiser: ele só atualiza.
+ENTRAR
+  Use o mesmo e-mail e a mesma senha do ObraTop. Suas obras, lançamentos e usuários já aparecem.
 
-DAR ACESSO A OUTRAS PESSOAS
-  Dois cliques em  USUARIOS.cmd , informe o e-mail e escolha o papel
-  (Sócio-Diretor, Coordenador, Orçamentista, Projetista ou Cliente).
+DAR ACESSO À EQUIPE
+  No aplicativo: Administrativo → Empresa e equipe → "Convidar pessoa". Envie o link gerado;
+  a pessoa cria a própria senha. O perfil (Coordenador, Orçamentista, Projetista) é escolhido
+  na tabela "Equipe" depois que ela entra.
 
-SE APARECER UM AVISO SOBRE "FUNÇÕES DO SERVIDOR"
-  Elas exigem o plano pago por uso (Blaze) do Firebase. O aplicativo funciona
-  sem elas. Ficam de fora: processamento de CAD no servidor, auditoria
-  automática, notificações e assinatura de contrato.
-
-GUARDE BEM
-  O arquivo  chave-firebase.json  que aparece nesta pasta dá acesso total ao
-  seu projeto Firebase. Não envie para ninguém nem publique na internet.
+IMPORTANTE
+  • A chave baixada (chave-firebase.json) dá acesso total ao seu projeto: não envie a ninguém.
+  • O plano Blaze do Firebase é necessário para as funções do servidor (versões de CAD,
+    auditoria, notificações, assinatura digital). Sem ele o restante funciona normalmente.
+  • Assinatura digital (Clicksign), conversão de DWG (Autodesk), emissão de notas, envio ao
+    eSocial e ligação direta com bancos dependem de contratos e do certificado digital da sua
+    empresa; o aplicativo indica em cada tela o que já funciona e o que depende disso.
