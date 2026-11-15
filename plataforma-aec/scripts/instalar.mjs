@@ -217,8 +217,12 @@ async function principal() {
     firebase(['hosting:sites:create', site, '--project', projectId, '--non-interactive'], { tolerar: true, capturar: true, tentarLogin: false });
     firebase(['target:apply', 'hosting', 'app', site, '--project', projectId, '--config', '.firebase.compartilhado.json']);
     // Sem --force: índices e regras de outros aplicativos nunca são apagados.
-    firebase(['deploy', '--only', 'firestore:rules,firestore:indexes,storage,hosting:app', ...base]);
-    ok(`Site e regras publicados em ${endereco}`);
+    firebase(['deploy', '--only', 'firestore:rules,firestore:indexes,hosting:app', ...base]);
+    ok(`Site e regras do banco de dados publicados em ${endereco}`);
+    // O Storage (arquivos) só existe em projetos no plano Blaze com o serviço ativado: sem ele, o resto é publicado.
+    const st = firebase(['deploy', '--only', 'storage', ...base], { tolerar: true, capturar: true, tentarLogin: false });
+    if (st.status === 0) ok('Regras de arquivos (Storage) publicadas.');
+    else aviso(`O armazenamento de arquivos (Storage) NÃO está ativado neste projeto — ele exige o plano Blaze. O aplicativo funciona sem ele; ficam de fora os anexos de documentos, o envio de arquivos CAD e o PDF de contratos para assinatura. Para ativar: https://console.firebase.google.com/project/${projectId}/storage e depois execute o instalador de novo.`);
     rodar('node', ['scripts/sync-shared.mjs'], { tolerar: true, capturar: true });
     const fn = firebase(['deploy', '--only', 'functions:plataforma-aec', ...base, '--force'], { tolerar: true, capturar: true, tentarLogin: false });
     if (fn.status === 0) ok('Funções do servidor publicadas (versões de CAD, auditoria, notificações, assinatura).');
