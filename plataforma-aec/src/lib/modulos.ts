@@ -1,0 +1,89 @@
+/**
+ * Mapa do aplicativo: as áreas (módulos) e as telas de cada uma. Navegação lateral, tela inicial,
+ * busca rápida (Ctrl+K) e páginas de área são todas desenhadas a partir daqui.
+ */
+import {
+  BadgeDollarSign, Boxes, Briefcase, Building, Building2, CalendarRange, Calculator, ClipboardCheck, ClipboardList, Compass, FileSignature, FileText,
+  FolderKanban, Gauge, Hammer, HardHat, Landmark, LayoutGrid, NotebookPen, Package, PenTool, Ruler, ScrollText, ShieldAlert, ShieldCheck, ShoppingCart,
+  Store, Truck, Users, UserCog, Wallet, Wrench, type LucideIcon,
+} from 'lucide-react';
+
+export type IdArea = 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
+
+export interface Tela { href: string; rotulo: string; icone: LucideIcon; descricao: string; soDono?: boolean }
+export interface Area {
+  id: IdArea;
+  nome: string;
+  resumo: string;
+  icone: LucideIcon;
+  /** Matiz (HSL) da cor de destaque da área — usada em ícones, faixas e gráficos de identidade. */
+  matiz: number;
+  telas: Tela[];
+}
+
+export const AREAS: Area[] = [
+  { id: 'comercial', nome: 'Comercial', resumo: 'Do primeiro contato ao contrato assinado.', icone: Briefcase, matiz: 262, telas: [
+    { href: '/briefing/', rotulo: 'Briefing', icone: ClipboardList, descricao: 'Programa de necessidades que vira escopo e entregáveis' },
+    { href: '/composicoes/', rotulo: 'Cotações', icone: BadgeDollarSign, descricao: 'Cotação por cliente com PDF e BDI embutido' },
+    { href: '/contratos/', rotulo: 'Propostas e contratos', icone: FileSignature, descricao: 'Modelo com cláusulas inteligentes e assinatura digital' },
+  ] },
+  { id: 'engenharia', nome: 'Engenharia e Arquitetura', resumo: 'Projetos, desenhos e modelos BIM.', icone: Compass, matiz: 212, telas: [
+    { href: '/dashboard/', rotulo: 'Projetos', icone: FolderKanban, descricao: 'Kanban e Gantt da carteira, ART/RRT e horas técnicas' },
+    { href: '/cad/', rotulo: 'CAD e revisões', icone: PenTool, descricao: 'Arquivos versionados, áreas por camada e marcações' },
+    { href: '/quantitativos/', rotulo: 'BIM e quantitativos', icone: Boxes, descricao: 'IFC, DXF, redes e topografia precificados por composições' },
+  ] },
+  { id: 'orcamento', nome: 'Orçamento', resumo: 'Custos, composições e preço de venda.', icone: Calculator, matiz: 172, telas: [
+    { href: '/composicoes/', rotulo: 'Serviços e composições', icone: Hammer, descricao: 'SINAPI-BA e ORSE-SE com pisos do Sinduscon-BA' },
+    { href: '/orcamento/', rotulo: 'Orçamento pelo CUB', icone: Ruler, descricao: 'Área equivalente NBR 12721, padrões e Curva S' },
+    { href: '/gestao/budgets/', rotulo: 'Orçamento da obra', icone: ScrollText, descricao: 'Itens, BDI e geração do cronograma' },
+    { href: '/quantitativos/', rotulo: 'Orçamento analítico', icone: Boxes, descricao: 'Quantitativos de projeto × bases oficiais' },
+  ] },
+  { id: 'planejamento', nome: 'Planejamento e Obras', resumo: 'Cronograma, avanço e medições.', icone: HardHat, matiz: 28, telas: [
+    { href: '/gestao/works/', rotulo: 'Obras', icone: Building2, descricao: 'Cadastro, desempenho e relatório gerencial' },
+    { href: '/gestao/activities/', rotulo: 'Cronograma', icone: CalendarRange, descricao: 'Gantt, caminho crítico, linha de base e MS Project' },
+    { href: '/gestao/dailyLogs/', rotulo: 'Diário de obra', icone: NotebookPen, descricao: 'Clima, equipes, serviços e ocorrências do dia' },
+    { href: '/gestao/measurements/', rotulo: 'Medições', icone: Gauge, descricao: 'Avanço físico, retenção, glosa e faturamento' },
+  ] },
+  { id: 'suprimentos', nome: 'Suprimentos', resumo: 'Compras, estoque e equipamentos.', icone: Truck, matiz: 340, telas: [
+    { href: '/gestao/orders/', rotulo: 'Compras', icone: ShoppingCart, descricao: 'Pedidos, prazos de entrega e aprovações' },
+    { href: '/gestao/inventory/', rotulo: 'Estoque', icone: Package, descricao: 'Mínimo, máximo, ponto de pedido e valor' },
+    { href: '/gestao/suppliers/', rotulo: 'Fornecedores', icone: Store, descricao: 'Base qualificada de fornecedores' },
+    { href: '/gestao/equipment/', rotulo: 'Equipamentos', icone: Wrench, descricao: 'Patrimônio, horímetro e manutenção' },
+  ] },
+  { id: 'financeiro', nome: 'Financeiro', resumo: 'Caixa, contratos e resultado.', icone: Landmark, matiz: 150, telas: [
+    { href: '/gestao/finance/', rotulo: 'Lançamentos', icone: Wallet, descricao: 'Receitas, despesas e fluxo de caixa projetado' },
+    { href: '/gestao/contracts/', rotulo: 'Contratos de obra', icone: FileText, descricao: 'Valores, aditivos e saldo a medir' },
+  ] },
+  { id: 'rh', nome: 'Recursos Humanos', resumo: 'Pessoas, alocação e horas.', icone: Users, matiz: 292, telas: [
+    { href: '/gestao/staff/', rotulo: 'Pessoal', icone: Users, descricao: 'Equipe, funções, salários e alocação por obra' },
+    { href: '/dashboard/', rotulo: 'Horas técnicas', icone: ClipboardCheck, descricao: 'Cronômetro por disciplina e margem real' },
+  ] },
+  { id: 'qualidade', nome: 'Qualidade e Segurança', resumo: 'Conformidade, SST e documentos.', icone: ShieldCheck, matiz: 48, telas: [
+    { href: '/gestao/quality/', rotulo: 'Qualidade', icone: ClipboardCheck, descricao: 'Não conformidades e planos de ação' },
+    { href: '/gestao/safety/', rotulo: 'Segurança do trabalho', icone: ShieldAlert, descricao: 'DDS, inspeções, incidentes e treinamentos' },
+    { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivos, revisões, vencimentos e aprovações' },
+  ] },
+  { id: 'administrativo', nome: 'Administrativo', resumo: 'Empresa, equipe e acessos.', icone: Building, matiz: 222, telas: [
+    { href: '/admin/', rotulo: 'Empresa e equipe', icone: UserCog, descricao: 'Dados da empresa, responsável técnico, usuários e convites', soDono: true },
+    { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivo geral da empresa e das obras' },
+  ] },
+];
+
+export const INICIO: Tela = { href: '/inicio/', rotulo: 'Início', icone: LayoutGrid, descricao: 'Visão geral e pendências' };
+export const areaPorId = (id: string): Area | undefined => AREAS.find((a) => a.id === id);
+const semBarra = (s: string) => s.replace(/\/+$/, '');
+
+/** Área e tela correspondentes a um caminho (a primeira área que contém a tela). */
+export function localizar(caminho: string, areaPreferida?: string): { area?: Area; tela?: Tela } {
+  const c = semBarra(caminho);
+  const m = /^\/area\/([\w-]+)/.exec(c);
+  if (m) return { area: areaPorId(m[1]!) };
+  const candidatas = AREAS.filter((a) => a.telas.some((t) => semBarra(t.href) === c));
+  const area = candidatas.find((a) => a.id === areaPreferida) ?? candidatas[0];
+  return { area, tela: area?.telas.find((t) => semBarra(t.href) === c) };
+}
+
+/** Cores de uma área a partir do matiz (funcionam nos dois temas). */
+export function corDaArea(matiz: number): React.CSSProperties {
+  return { ['--area' as string]: `${matiz} 72% 52%`, ['--area-suave' as string]: `${matiz} 80% 60%` };
+}

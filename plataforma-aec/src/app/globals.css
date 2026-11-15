@@ -59,3 +59,31 @@
   body { @apply bg-background text-foreground antialiased; font-feature-settings: 'cv11', 'ss01'; }
   .tabular { font-variant-numeric: tabular-nums; }
 }
+
+/* ── ObraTop 4: superfícies, destaque por área e movimento ───────────────── */
+@layer components {
+  /* Fundo com luz difusa nas cores da área; some com "reduzir movimento". */
+  .aurora { position: relative; isolation: isolate; }
+  .aurora::before {
+    content: ''; position: absolute; inset: -20% -10% auto -10%; height: 420px; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(38% 60% at 18% 30%, hsl(var(--area, var(--primary)) / 0.22), transparent 70%),
+      radial-gradient(34% 55% at 78% 20%, hsl(var(--area-2, 262 80% 60%) / 0.16), transparent 70%);
+    filter: blur(24px); animation: aurora 18s ease-in-out infinite alternate;
+  }
+  @keyframes aurora { from { transform: translate3d(-2%, 0, 0) scale(1); } to { transform: translate3d(3%, 4%, 0) scale(1.08); } }
+  .vidro { background: hsl(var(--card) / 0.72); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); }
+  /* Cartão interativo: sobe um pouco e ganha um contorno na cor da área. */
+  .tile { position: relative; border-radius: 1rem; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .tile:hover, .tile:focus-visible { transform: translateY(-2px); border-color: hsl(var(--area, var(--primary)) / 0.55); box-shadow: 0 10px 30px -12px hsl(var(--area, var(--primary)) / 0.45); outline: none; }
+  .tile:focus-visible { box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring)); }
+  .icone-area { display: grid; place-items: center; border-radius: 0.8rem; color: white;
+    background: linear-gradient(135deg, hsl(var(--area, var(--primary))), hsl(var(--area-suave, var(--primary)) / 0.75)); box-shadow: 0 6px 16px -6px hsl(var(--area, var(--primary)) / 0.7); }
+  .texto-area { color: hsl(var(--area, var(--primary))); }
+  .entrar { animation: entrar .35s ease both; }
+  @keyframes entrar { from { opacity: 0.001; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before, .entrar { animation: none; }
+  .tile, .tile:hover { transition: none; transform: none; }
+}

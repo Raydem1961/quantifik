@@ -1,6 +1,6 @@
 'use client';
 /**
- * Acesso a dados em tempo real. Com Firebase: Firestore `onSnapshot` escopado ao tenant.
+ * Acesso a dados em tempo real. Com Firebase: Firestore `onSnapshot` dentro de `organizations/{empresa}` — o mesmo lugar onde o ObraTop guarda os dados.
  * Em modo demonstração: um armazenamento em memória com a mesma interface (inclusive escrita),
  * para que Kanban, timesheet e redlines funcionem sem backend.
  */
@@ -39,8 +39,7 @@ export interface OpcoesColecao {
 }
 
 export function useColecao<T extends { id: string }>(caminho: string | null, opcoes: OpcoesColecao = {}) {
-  const { tenantId, role, usuario } = useAuth();
-  const uid = usuario?.uid;
+  const { tenantId } = useAuth();
   const [estado, setEstado] = React.useState<{ dados: T[]; carregando: boolean; erro?: string }>({ dados: [], carregando: !MODO_DEMO });
   const demo = React.useSyncExternalStore(
     (f) => { ouvintes.add(f); return () => ouvintes.delete(f); },
@@ -50,20 +49,14 @@ export function useColecao<T extends { id: string }>(caminho: string | null, opc
 
   React.useEffect(() => {
     if (MODO_DEMO || !tenantId || !caminho) return;
-    const colecao = collection(db(), 'tenants', tenantId, ...caminho.split('/'));
-    // As regras só deixam o cliente final listar o que é dele: a consulta precisa ter o mesmo filtro.
-    const doCliente = role === 'cliente' && uid
-      ? caminho === 'projects' ? query(colecao, where('clienteUids', 'array-contains', uid))
-        : caminho === 'notifications' ? query(colecao, where('destinatarios', 'array-contains', uid))
-        : null
-      : null;
+    const colecao = collection(db(), 'organizations', tenantId, ...caminho.split('/'));
     const ref = opcoes.grupo
-      ? query(collectionGroup(db(), caminho), where('tenantId', '==', tenantId))
-      : doCliente ?? colecao;
+      ? query(collectionGroup(db(), caminho), where('orgId', '==', tenantId))
+      : colecao;
     return onSnapshot(ref, (snap) => {
       setEstado({ dados: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T), carregando: false });
     }, (e) => setEstado({ dados: [], carregando: false, erro: e.message }));
-  }, [tenantId, caminho, opcoes.grupo, role, uid]);
+  }, [tenantId, caminho, opcoes.grupo]);
 
   return MODO_DEMO ? { dados: demo as unknown as T[], carregando: false, erro: undefined } : estado;
 }
@@ -92,7 +85,7 @@ export async function atualizarDoc(tenantId: string, caminho: string, patch: Doc
     avisar();
     return;
   }
-  await concluir(updateDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), patch));
+  await concluir(updateDoc(doc(db(), 'organizations', tenantId, ...caminho.split('/')), patch));
 }
 
 /** Cria um documento em uma coleção do tenant (ex.: 'projects/p1/timesheets'). */
@@ -104,10 +97,9 @@ export async function adicionarDoc(tenantId: string, caminho: string, dados: Doc
     avisar();
     return id;
   }
-  // `tenantId` é gravado no documento: as regras de collectionGroup dependem dele.
   // O id é gerado no cliente para que a criação também funcione sem esperar o servidor.
-  const novo = doc(collection(db(), 'tenants', tenantId, ...caminho.split('/')));
-  await concluir(setDoc(novo, { ...dados, tenantId }));
+  const novo = doc(collection(db(), 'organizations', tenantId, ...caminho.split('/')));
+  await concluir(setDoc(novo, { ...dados, orgId: tenantId }));
   return novo.id;
 }
 
@@ -121,7 +113,7 @@ export async function definirDoc(tenantId: string, caminho: string, dados: Docum
     avisar();
     return;
   }
-  await concluir(setDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/')), { ...dados, tenantId }));
+  await concluir(setDoc(doc(db(), 'organizations', tenantId, ...caminho.split('/')), { ...dados, orgId: tenantId }));
 }
 
 export async function removerDoc(tenantId: string, caminho: string): Promise<void> {
@@ -133,5 +125,5 @@ export async function removerDoc(tenantId: string, caminho: string): Promise<voi
     avisar();
     return;
   }
-  await concluir(deleteDoc(doc(db(), 'tenants', tenantId, ...caminho.split('/'))));
+  await concluir(deleteDoc(doc(db(), 'organizations', tenantId, ...caminho.split('/'))));
 }

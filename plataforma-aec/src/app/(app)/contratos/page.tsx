@@ -16,7 +16,7 @@ import { gerarCronogramaFisicoFinanceiro, gerarCurvaS } from '@/lib/cub/schedule
 import { functions, MODO_DEMO, storage } from '@/lib/firebase/client';
 import { brl, dataExtenso, num } from '@/lib/format';
 import { pode } from '@/lib/rbac';
-import { sha256Hex, type PedidoAssinatura, type Signatario } from '@/lib/signature/hash';
+import { sha256Hex, type Signatario } from '@/lib/signature/hash';
 import { TIPOLOGIAS_INFRA, type Project } from '@/lib/types';
 
 const PARCELAS = [['Assinatura do contrato', 0.2], ['Entrega do anteprojeto', 0.3], ['Entrega do projeto legal', 0.2], ['Entrega do projeto executivo', 0.3]] as const;
@@ -112,12 +112,12 @@ export default function Contratos() {
     if (MODO_DEMO) { setEstado({ ok: 'Modo demonstração: o envelope seria criado na Clicksign com o hash acima. Configure o Firebase para enviar de verdade.' }); return; }
     setEstado({ ocupado: 'Enviando para assinatura…' });
     try {
-      const pdfPath = `tenants/${tenantId}/projects/${projeto.id}/docs/${pdf.codigo}-${pdf.sha256.slice(0, 12)}.pdf`;
+      const pdfPath = `organizations/${tenantId}/projects/${projeto.id}/docs/${pdf.codigo}-${pdf.sha256.slice(0, 12)}.pdf`;
       await uploadBytes(ref(storage(), pdfPath), pdf.blob, { contentType: 'application/pdf' });
       const contractId = await adicionarDoc(tenantId, `projects/${projeto.id}/contracts`, {
         projectId: projeto.id, titulo: `Contrato ${pdf.codigo}`, template: modelo, variaveis: Object.fromEntries(Object.entries(ctx).map(([k, v]) => [k, String(v ?? '')])), status: 'rascunho', criadoEm: new Date().toISOString(),
       });
-      const pedido: Omit<PedidoAssinatura, 'tenantId'> = { projectId: projeto.id, contractId, provedor: 'clicksign', pdfPath, sha256: pdf.sha256, signatarios: signatarios() };
+      const pedido = { orgId: tenantId, projectId: projeto.id, contractId, provedor: 'clicksign', pdfPath, sha256: pdf.sha256, signatarios: signatarios() };
       await httpsCallable(functions(), 'solicitarAssinatura')(pedido);
       setEstado({ ok: 'Contrato enviado. Os signatários receberão o link por e-mail; o status é atualizado automaticamente.' });
     } catch (e) {

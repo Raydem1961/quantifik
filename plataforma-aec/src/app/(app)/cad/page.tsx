@@ -62,7 +62,7 @@ export default function Cad() {
       return;
     }
     // Nome único → objeto imutável; a revisão (R00, R01…) é atribuída pela Cloud Function.
-    const caminho = `tenants/${tenantId}/projects/${projeto.id}/cad/${disciplina}/${Date.now()}__${arquivo.name.replace(/[^\w.\-]+/g, '_')}`;
+    const caminho = `organizations/${tenantId}/projects/${projeto.id}/cad/${disciplina}/${Date.now()}__${arquivo.name.replace(/[^\w.\-]+/g, '_')}`;
     const tarefa = uploadBytesResumable(ref(storage(), caminho), arquivo, { customMetadata: { uid: usuario.uid } });
     tarefa.on('state_changed',
       (s) => setProgresso(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0),

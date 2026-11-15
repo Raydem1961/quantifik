@@ -1,0 +1,35 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function member(orgId) {
+      return request.auth != null &&
+        firestore.exists(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+    function owner(orgId) {
+      return member(orgId) && firestore.get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.role == 'owner';
+    }
+    function assigned(orgId, workId) {
+      return member(orgId) &&
+        firestore.get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.workId == workId;
+    }
+    function safeFile() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('(application/pdf|image/.*|application/msword|application/vnd.*)');
+    }
+
+    match /organizations/{orgId}/documents/{workId}/{fileName} {
+      allow read: if member(orgId);
+      allow create: if (owner(orgId) || assigned(orgId, workId)) && safeFile();
+      allow update: if false;
+      allow delete: if owner(orgId);
+    }
+
+    // Compatibilidade somente-leitura/remoção para anexos antigos da produção.
+    match /organizations/{orgId}/documents/{fileName} {
+      allow read: if member(orgId);
+      allow create, update: if false;
+      allow delete: if owner(orgId);
+    }
+  }
+}

@@ -1,0 +1,20 @@
+    // CAD: organizations/{org}/projects/{p}/cad/{disciplina}/{carimbo}__{arquivo}
+    // Objetos são imutáveis (cada upload é uma nova revisão) — por isso não há `update`.
+    match /organizations/{orgId}/projects/{projectId}/cad/{disciplina}/{arquivo} {
+      allow read: if member(orgId);
+      allow create: if member(orgId)
+        && request.resource.metadata.uid == request.auth.uid // autoria não pode ser forjada
+        && request.resource.size < 300 * 1024 * 1024
+        && arquivo.matches('(?i).*\\.(dwg|dxf|csv|xml|ifc|inp|txt|landxml)$');
+      allow delete: if owner(orgId);
+    }
+    // PDFs de propostas e contratos.
+    match /organizations/{orgId}/projects/{projectId}/docs/{arquivo} {
+      allow read: if member(orgId);
+      allow create: if member(orgId) && request.resource.contentType == 'application/pdf' && request.resource.size < 30 * 1024 * 1024;
+    }
+    // Logotipo (white-label).
+    match /organizations/{orgId}/branding/{arquivo} {
+      allow read: if member(orgId);
+      allow write: if owner(orgId) && request.resource.contentType.matches('image/.*') && request.resource.size < 2 * 1024 * 1024;
+    }

@@ -1,0 +1,201 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function member(orgId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+    function memberDoc(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data;
+    }
+    function owner(orgId) { return member(orgId) && memberDoc(orgId).role == 'owner'; }
+    function assigned(orgId, workId) {
+      return member(orgId) && workId is string && workId.size() > 0 &&
+        memberDoc(orgId).workId is string && memberDoc(orgId).workId == workId;
+    }
+    function validWorkRef(orgId, workId) {
+      return workId is string && workId.size() > 0 &&
+        existsAfter(/databases/$(database)/documents/organizations/$(orgId)/works/$(workId));
+    }
+    function validPercent(data, key) {
+      return !(key in data) || (data[key] is number && data[key] >= 0 && data[key] <= 100);
+    }
+    function validNonNegative(data, key) {
+      return !(key in data) || (data[key] is number && data[key] >= 0);
+    }
+    function validText(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+    function commonValid(data) {
+      return validText(data, 'workId', 160) &&
+        (!( 'deleted' in data) || data.deleted is bool);
+    }
+    function noDeleteOnCreate(orgId) { return owner(orgId) || request.resource.data.get('deleted', false) == false; }
+    function noDeleteOnUpdate(orgId) {
+      return owner(orgId) || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'deleted', 'deletedAt', 'deletedBy', 'deletedReason', 'deleteReason',
+        'duplicateOf', 'sanitizedAt', 'sanitizedBy', 'restoredAt', 'restoredBy'
+      ]);
+    }
+    function linkedCreate(orgId) {
+      let workId = request.resource.data.get('workId', '');
+      return commonValid(request.resource.data) && noDeleteOnCreate(orgId) && (
+        (owner(orgId) && (workId == '' || validWorkRef(orgId, workId))) ||
+        (validWorkRef(orgId, workId) && assigned(orgId, workId))
+      );
+    }
+    function linkedUpdate(orgId) {
+      let workId = request.resource.data.get('workId', '');
+      let oldWorkId = resource.data.get('workId', '');
+      return commonValid(request.resource.data) && noDeleteOnUpdate(orgId) && (
+        (owner(orgId) && (workId == '' || validWorkRef(orgId, workId))) ||
+        (workId == oldWorkId && validWorkRef(orgId, workId) && assigned(orgId, oldWorkId))
+      );
+    }
+    function linkedDelete(orgId) {
+      return owner(orgId);
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+    match /users/{userId}/state/{stateId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /invites/{code} {
+      allow get: if signedIn() && request.auth.token.email == resource.data.email && request.time < resource.data.expiresAt;
+      allow list: if false;
+      allow create: if signedIn() && owner(request.resource.data.orgId) &&
+        request.resource.data.role == 'project_user' &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 254 &&
+        request.resource.data.workId is string &&
+        exists(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)/works/$(request.resource.data.workId)) &&
+        request.resource.data.expiresAt is timestamp && request.resource.data.expiresAt > request.time;
+      allow delete: if signedIn() &&
+        (request.auth.token.email == resource.data.email || owner(resource.data.orgId));
+      allow update: if false;
+    }
+
+    match /organizations/{orgId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120;
+      allow read: if member(orgId);
+      allow update: if owner(orgId) && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if member(orgId);
+        allow create: if signedIn() && (
+          (request.auth.uid == memberId &&
+           getAfter(/databases/$(database)/documents/organizations/$(orgId)).data.ownerUid == request.auth.uid &&
+           request.resource.data.role == 'owner' && request.resource.data.status == 'active') ||
+          (request.auth.uid == memberId &&
+           request.resource.data.inviteCode is string &&
+           get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.orgId == orgId &&
+           get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.email == request.auth.token.email &&
+           get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.expiresAt > request.time &&
+           request.resource.data.role == 'project_user' &&
+           request.resource.data.workId == get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.workId &&
+           request.resource.data.status == 'active')
+        );
+        allow update: if owner(orgId) &&
+          resource.data.role != 'owner' && request.resource.data.role == 'project_user' &&
+          request.resource.data.email == resource.data.email &&
+          request.resource.data.inviteCode == resource.data.inviteCode &&
+          validWorkRef(orgId, request.resource.data.workId);
+        allow delete: if owner(orgId) && resource.data.role != 'owner';
+      }
+
+      match /works/{id} {
+        allow read: if member(orgId);
+        allow create: if owner(orgId) &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 180 &&
+          validPercent(request.resource.data, 'progress') && validNonNegative(request.resource.data, 'value');
+        allow update: if (owner(orgId) || assigned(orgId, id)) && noDeleteOnUpdate(orgId) &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 180 &&
+          validPercent(request.resource.data, 'progress') && validNonNegative(request.resource.data, 'value');
+        allow delete: if owner(orgId);
+      }
+
+      match /measurements/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validPercent(request.resource.data,'physical') && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validPercent(request.resource.data,'physical') && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /budgets/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'qty') && validNonNegative(request.resource.data,'unitValue') && validPercent(request.resource.data,'bdi'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'qty') && validNonNegative(request.resource.data,'unitValue') && validPercent(request.resource.data,'bdi'); allow delete: if linkedDelete(orgId); }
+      match /activities/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validPercent(request.resource.data,'progress') && validNonNegative(request.resource.data,'durationDays') && validNonNegative(request.resource.data,'plannedQty') && validNonNegative(request.resource.data,'actualQty'); allow update: if linkedUpdate(orgId) && validPercent(request.resource.data,'progress') && validNonNegative(request.resource.data,'durationDays') && validNonNegative(request.resource.data,'plannedQty') && validNonNegative(request.resource.data,'actualQty'); allow delete: if linkedDelete(orgId); }
+      match /orders/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /inventory/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'currentStock') && validNonNegative(request.resource.data,'minStock') && validNonNegative(request.resource.data,'maxStock') && validNonNegative(request.resource.data,'unitValue'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'currentStock') && validNonNegative(request.resource.data,'minStock') && validNonNegative(request.resource.data,'maxStock') && validNonNegative(request.resource.data,'unitValue'); allow delete: if linkedDelete(orgId); }
+      match /finance/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /quality/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId); allow update: if linkedUpdate(orgId); allow delete: if linkedDelete(orgId); }
+      match /contracts/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /staff/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'salary'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'salary'); allow delete: if linkedDelete(orgId); }
+      match /equipment/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'monthlyCost') && validNonNegative(request.resource.data,'hourmeter'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'monthlyCost') && validNonNegative(request.resource.data,'hourmeter'); allow delete: if linkedDelete(orgId); }
+      match /safety/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId); allow update: if linkedUpdate(orgId); allow delete: if linkedDelete(orgId); }
+      match /documents/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId); allow update: if linkedUpdate(orgId); allow delete: if linkedDelete(orgId); }
+
+      match /suppliers/{id} {
+        allow read: if member(orgId);
+        allow create, update: if owner(orgId) && validText(request.resource.data,'name',180) && validText(request.resource.data,'cnpj',32);
+        allow delete: if owner(orgId);
+      }
+
+      match /progressSnapshots/{id} {
+        allow read: if member(orgId);
+        allow create: if commonValid(request.resource.data) && noDeleteOnCreate(orgId) && validWorkRef(orgId, request.resource.data.workId) &&
+          (owner(orgId) || assigned(orgId, request.resource.data.workId)) &&
+          request.resource.data.date is string && validPercent(request.resource.data,'physicalPlanned') && validPercent(request.resource.data,'physicalActual') &&
+          validNonNegative(request.resource.data,'budget') && validNonNegative(request.resource.data,'paid');
+        allow update: if commonValid(request.resource.data) && noDeleteOnUpdate(orgId) && validWorkRef(orgId, request.resource.data.workId) &&
+          (owner(orgId) || assigned(orgId, request.resource.data.workId)) &&
+          request.resource.data.date is string && validPercent(request.resource.data,'physicalPlanned') && validPercent(request.resource.data,'physicalActual') &&
+          validNonNegative(request.resource.data,'budget') && validNonNegative(request.resource.data,'paid');
+        allow delete: if owner(orgId);
+      }
+
+      match /systemOperations/{id} {
+        allow read, create, update: if owner(orgId);
+        allow delete: if false;
+      }
+
+      match /restorePoints/{pointId} {
+        allow read: if member(orgId);
+        allow create, update, delete: if owner(orgId);
+        match /chunks/{chunkId} {
+          allow read: if member(orgId);
+          allow create, delete: if owner(orgId);
+          allow update: if false;
+        }
+      }
+
+      match /restoreHistory/{historyId} {
+        allow read: if member(orgId);
+        allow create: if owner(orgId);
+        allow update, delete: if false;
+      }
+
+      match /engineeringProjects/{projectId} {
+        allow read: if member(orgId);
+        allow create: if linkedCreate(orgId);
+        allow update: if linkedUpdate(orgId);
+        allow delete: if owner(orgId);
+        match /takeoffs/{takeoffId} {
+          allow read: if member(orgId);
+          allow create: if member(orgId) && noDeleteOnCreate(orgId) &&
+            getAfter(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId is string &&
+            (owner(orgId) || assigned(orgId, getAfter(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId));
+          allow update: if member(orgId) && noDeleteOnUpdate(orgId) &&
+            get(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId is string &&
+            (owner(orgId) || assigned(orgId, get(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId));
+          allow delete: if owner(orgId);
+        }
+      }
+
+      match /audits/{id} {
+        allow read: if owner(orgId);
+        allow create: if member(orgId) && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

@@ -4,6 +4,6 @@ import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const router = useRouter();
-  useEffect(() => { router.replace('/dashboard/'); }, [router]);
+  useEffect(() => { router.replace('/inicio/'); }, [router]);
   return null;
 }

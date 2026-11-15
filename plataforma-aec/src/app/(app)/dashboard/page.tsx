@@ -64,7 +64,7 @@ export default function Dashboard() {
   if (!tenantId || !usuario) return null;
   return (
     <>
-      <PageHeader titulo={cliente ? 'Meus projetos' : 'Dashboard'} descricao={cliente ? 'Acompanhe o andamento dos seus projetos em tempo real.' : 'Carteira de projetos, prazos, responsabilidade técnica e rentabilidade em tempo real.'}>
+      <PageHeader titulo={cliente ? 'Meus projetos' : 'Projetos'} descricao={cliente ? 'Acompanhe o andamento dos seus projetos em tempo real.' : 'Carteira de projetos, prazos, responsabilidade técnica e rentabilidade em tempo real.'}>
         {!cliente && <><Link href="/briefing/" className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent">Novo briefing</Link>
         <Link href="/orcamento/" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Novo orçamento</Link></>}
       </PageHeader>
@@ -95,7 +95,7 @@ export default function Dashboard() {
       {andamentoObras.length > 0 && (
         <Card className="mt-4">
           <CardHeader className="flex-row items-center justify-between"><div><CardTitle>Obras em execução</CardTitle><CardDescription className="mt-1">Avanço físico planejado × realizado, ponderado pelo orçamento ou pela duração.</CardDescription></div>
-            <Link href="/gestao/" className="text-sm font-medium text-primary underline-offset-2 hover:underline">Gestão de obras</Link></CardHeader>
+            <Link href="/gestao/works/" className="text-sm font-medium text-primary underline-offset-2 hover:underline">Gestão de obras</Link></CardHeader>
           <CardContent className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">
             {andamentoObras.map(({ obra, n, planejado, realizado }) => {
               const desvio = realizado - planejado;

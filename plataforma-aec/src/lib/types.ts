@@ -1,7 +1,7 @@
 /**
  * Schema do Firestore (documentos tipados).
  *
- * tenants/{tenantId}
+ * organizations/{orgId}        (mesma raiz do ObraTop; `tenantId` no código = id da organização)
  *   ├─ members/{uid}
  *   ├─ clients/{clientId}
  *   ├─ projects/{projectId}

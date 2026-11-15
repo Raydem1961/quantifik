@@ -1,0 +1,114 @@
+      // Perfil de cada pessoa nos módulos novos: só o proprietário define.
+      match /perfis/{uid} {
+        allow read: if member(orgId);
+        allow create, update: if owner(orgId) && request.resource.data.keys().hasOnly(['perfil']) &&
+          request.resource.data.perfil in ['', 'coordenador', 'orcamentista', 'projetista'];
+        allow delete: if owner(orgId);
+      }
+      // ── Projetos (escritório): briefing, CAD, quantitativos, orçamento, contrato, ART, horas ──
+      match /clients/{clientId} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId);
+        allow delete: if owner(orgId);
+      }
+      match /projects/{projectId} {
+        allow read: if member(orgId);
+        allow create, update: if gestorAec(orgId);
+        allow delete: if owner(orgId);
+
+        match /briefings/{id} {
+          allow read: if member(orgId);
+          allow write: if gestorAec(orgId);
+        }
+        match /files/{fileId} {
+          allow read: if member(orgId);
+          allow delete: if gestorAec(orgId);
+          allow create, update: if false; // criados pela função que processa o upload
+          match /versions/{rev} {
+            allow read: if member(orgId);
+            allow write: if false; // revisões são imutáveis
+          }
+        }
+        match /quantities/{id} {
+          allow read: if member(orgId);
+          allow create, update: if orcaAec(orgId) && request.resource.data.itens is list && request.resource.data.itens.size() <= 5000;
+          allow delete: if orcaAec(orgId);
+        }
+        match /redlines/{id} {
+          allow read: if member(orgId);
+          allow create: if member(orgId) && request.resource.data.autorUid == request.auth.uid;
+          allow delete: if gestorAec(orgId) || (member(orgId) && resource.data.autorUid == request.auth.uid);
+          allow update: if false;
+        }
+        // Orçamentos do PROJETO (CUB). Os itens de orçamento da OBRA continuam em /budgets do ObraTop.
+        match /budgets/{id} {
+          allow read: if member(orgId);
+          allow create: if orcaAec(orgId) && request.resource.data.status == 'rascunho';
+          allow update: if owner(orgId)
+            || (orcaAec(orgId) && request.resource.data.status in ['rascunho', 'enviado'] && resource.data.status != 'aprovado');
+          allow delete: if owner(orgId);
+        }
+        match /contracts/{id} {
+          allow read: if orcaAec(orgId);
+          allow create: if gestorAec(orgId) && request.resource.data.status == 'rascunho';
+          // Só rascunhos são editáveis; status, hash e assinatura são do servidor.
+          allow update: if gestorAec(orgId) && resource.data.status == 'rascunho' && naoAltera(['status', 'sha256', 'assinatura']);
+          allow delete: if owner(orgId) && resource.data.status == 'rascunho';
+        }
+        match /artRrt/{id} {
+          allow read: if member(orgId);
+          allow create, update: if gestorAec(orgId) && request.resource.data.orgId == orgId;
+          allow delete: if gestorAec(orgId);
+        }
+        match /timesheets/{id} {
+          allow read: if gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid);
+          allow create: if member(orgId) && request.resource.data.uid == request.auth.uid
+            && request.resource.data.orgId == orgId
+            && request.resource.data.minutos is number && request.resource.data.minutos > 0 && request.resource.data.minutos <= 1440;
+          allow update: if (gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid)) && naoAltera(['uid', 'orgId']);
+          allow delete: if gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid);
+        }
+      }
+
+      // ── Orçamentação: cotações, parâmetros de preço, vínculos de composição, ajustes de CUB ──
+      match /cotacoes/{id} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId) && request.resource.data.itens is list && request.resource.data.itens.size() <= 500;
+        allow delete: if orcaAec(orgId);
+      }
+      match /config/{id} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId);
+        allow delete: if false;
+      }
+      match /vinculos/{id} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId) && request.resource.data.estado == 'confirmado'
+          && request.resource.data.fator is number && request.resource.data.fator > 0;
+        allow delete: if orcaAec(orgId);
+      }
+      match /cubOverrides/{tabelaId} {
+        allow read: if member(orgId);
+        allow write: if owner(orgId);
+      }
+
+      // ── Notificações e trilha de auditoria do servidor ──
+      match /notifications/{id} {
+        allow read: if member(orgId);
+        // O usuário só pode marcar a notificação como lida para si mesmo.
+        allow update: if member(orgId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lidaPor'])
+          && request.resource.data.lidaPor.toSet().difference(resource.data.lidaPor.toSet()) == [request.auth.uid].toSet();
+        allow create, delete: if false;
+      }
+      match /auditLogs/{id} {
+        allow read: if owner(orgId);
+        allow write: if false;
+      }
+      // Diário de obra: mesmas condições dos demais registros ligados a uma obra.
+      match /dailyLogs/{id} {
+        allow read: if member(orgId);
+        allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data, 'laborCount') && validNonNegative(request.resource.data, 'equipmentCount') && validPercent(request.resource.data, 'progressTo');
+        allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data, 'laborCount') && validNonNegative(request.resource.data, 'equipmentCount') && validPercent(request.resource.data, 'progressTo');
+        allow delete: if linkedDelete(orgId);
+      }

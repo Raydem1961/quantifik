@@ -134,4 +134,38 @@ export const DEMO_OBRA: Record<string, Reg[]> = {
   ],
   inventory: [{ id: 'i1', workId: 'w1', date: iso(0), material: 'Cimento CP II-32', category: 'Aglomerantes', unit: 'sc', currentStock: 40, minStock: 60, maxStock: 300, safetyStock: 30, avgDailyConsumption: 12, leadTimeDays: 3, unitValue: 38 }],
   suppliers: [{ id: 's1', name: 'Fornecedor Demo Ltda.', cnpj: '00.000.000/0001-00', category: 'Materiais básicos', status: 'Ativo' }],
+  orders: [
+    { id: 'o1', workId: 'w1', supplierId: 's1', date: iso(-6), dueDate: iso(4), description: 'Aço CA-50 10 mm e 12,5 mm', value: 74200, status: 'Aprovado' },
+    { id: 'o2', workId: 'w1', supplierId: 's1', date: iso(-1), dueDate: iso(6), description: 'Cimento CP II-32 — 200 sacos', inventoryId: 'i1', qty: 200, value: 7600, status: 'Aguardando aprovação' },
+    { id: 'o3', workId: 'w2', supplierId: 's1', date: iso(-3), dueDate: iso(9), description: 'Brita graduada simples — 320 m³', value: 41600, status: 'Em cotação' },
+  ],
+  staff: [
+    { id: 'p1', name: 'Engenheira Residente Demo', role: 'Engenheira civil', admission: iso(-700), salary: 12500, workId: 'w1', status: 'Ativo' },
+    { id: 'p2', name: 'Mestre de Obras Demo', role: 'Mestre de obras', admission: iso(-420), salary: 6800, workId: 'w1', status: 'Ativo' },
+    { id: 'p3', name: 'Encarregado Demo', role: 'Encarregado de pavimentação', admission: iso(-200), salary: 5200, workId: 'w2', status: 'Ativo' },
+    { id: 'p4', name: 'Técnica de Segurança Demo', role: 'Técnica de segurança', admission: iso(-150), salary: 4900, status: 'Ativo' },
+    { id: 'p5', name: 'Almoxarife Demo', role: 'Almoxarife', admission: iso(-90), salary: 3100, workId: 'w1', status: 'Férias' },
+  ],
+  equipment: [
+    { id: 'e1', name: 'Betoneira 400 L', code: 'EQ-014', workId: 'w1', startDate: iso(-58), monthlyCost: 650, hourmeter: 412, nextMaintenance: iso(5), status: 'Operacional' },
+    { id: 'e2', name: 'Rolo compactador', code: 'EQ-031', workId: 'w2', startDate: iso(-18), monthlyCost: 9800, hourmeter: 1630, nextMaintenance: iso(21), status: 'Operacional' },
+  ],
+  quality: [
+    { id: 'q1', workId: 'w1', date: iso(-4), stage: 'Estrutura — térreo', issue: 'Cobrimento de armadura abaixo do especificado no pilar P7', responsible: 'Mestre B', deadline: iso(3), severity: 'Crítica', status: 'Em andamento' },
+    { id: 'q2', workId: 'w1', date: iso(-12), stage: 'Fundações', issue: 'Falha no registro de rastreabilidade do concreto', responsible: 'Engenheira Residente Demo', deadline: iso(-2), severity: 'Menor', status: 'Resolvida' },
+  ],
+  safety: [
+    { id: 'g1', workId: 'w1', date: iso(-1), type: 'DDS', description: 'Trabalho em altura e uso do cinto', responsible: 'Técnica de Segurança Demo', status: 'Concluído' },
+    { id: 'g2', workId: 'w1', date: iso(-7), type: 'Inspeção', description: 'Inspeção de andaimes e guarda-corpos', responsible: 'Técnica de Segurança Demo', status: 'Concluído' },
+    { id: 'g3', workId: 'w2', date: iso(-3), type: 'Treinamento', description: 'NR-12 — operação de máquinas', responsible: 'Técnica de Segurança Demo', status: 'Concluído' },
+  ],
+  documents: [
+    { id: 'd1', workId: 'w1', name: 'Alvará de construção', category: 'Licenças', date: iso(-70), expiry: iso(24), revision: 'R00', status: 'Aprovado' },
+    { id: 'd2', workId: 'w1', name: 'PCMSO / PGR', category: 'Segurança', date: iso(-60), expiry: iso(300), revision: 'R01', status: 'Aprovado' },
+    { id: 'd3', name: 'Certidão negativa de débitos', category: 'Fiscal', date: iso(-100), expiry: iso(80), revision: 'R00', status: 'Aprovado' },
+  ],
+  dailyLogs: [
+    { id: 'r1', workId: 'w1', date: iso(-1), weather: 'Bom', workable: 'Sim', laborCount: 18, equipmentCount: 3, services: 'Armação e fôrmas das vigas do térreo', responsible: 'Mestre B', status: 'Assinado' },
+    { id: 'r2', workId: 'w2', date: iso(-1), weather: 'Chuva fraca', workable: 'Parcial', laborCount: 9, equipmentCount: 4, services: 'Regularização do subleito — trecho 2', occurrences: 'Paralisação de 2 h por chuva', responsible: 'Encarregado E', status: 'Assinado' },
+  ],
 };

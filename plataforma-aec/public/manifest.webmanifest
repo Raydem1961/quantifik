@@ -1,6 +1,6 @@
 {
-  "name": "Plataforma AEC — Projetos, Obras e Orçamento",
-  "short_name": "Plataforma AEC",
+  "name": "ObraTop — Obras, Projetos e Orçamento",
+  "short_name": "ObraTop",
   "description": "Gestão de projetos e obras, CAD/BIM, orçamento, cotações e contratos.",
   "lang": "pt-BR",
   "start_url": "/dashboard/",

@@ -24,7 +24,7 @@ export default function Login() {
     setInfo(`Se ${email} tiver cadastro, enviamos um link para criar uma nova senha. Confira também a caixa de spam.`);
   };
 
-  React.useEffect(() => { if (!carregando && usuario) router.replace('/dashboard/'); }, [carregando, usuario, router]);
+  React.useEffect(() => { if (!carregando && usuario) router.replace('/inicio/'); }, [carregando, usuario, router]);
 
   const entrar = async (acao: () => Promise<unknown>) => {
     setErro(undefined);
@@ -37,7 +37,7 @@ export default function Login() {
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <div className="mb-2 grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground"><Building2 className="h-5 w-5" /></div>
-          <CardTitle className="text-base">Plataforma AEC</CardTitle>
+          <CardTitle className="text-base">ObraTop</CardTitle>
           <CardDescription>{MODO_DEMO ? 'Modo demonstração — Firebase não configurado.' : 'Entre com a conta do seu escritório.'}</CardDescription>
         </CardHeader>
         <CardContent>

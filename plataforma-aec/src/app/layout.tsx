@@ -10,8 +10,8 @@ export const viewport: Viewport = { themeColor: '#3b4cca', width: 'device-width'
 export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
-  appleWebApp: { capable: true, title: 'Plataforma AEC' },
-  title: 'Plataforma AEC — Gestão de Projetos, CAD e Orçamento',
+  appleWebApp: { capable: true, title: 'ObraTop' },
+  title: 'ObraTop — Gestão de obras, projetos e orçamento',
   description: 'ERP para escritórios de arquitetura e engenharia: briefing, CAD/QTO, orçamento CUB, contratos e assinatura digital.',
 };
 

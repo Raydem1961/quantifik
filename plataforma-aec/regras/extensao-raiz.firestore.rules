@@ -1,0 +1,28 @@
+    // ── Funções auxiliares dos módulos novos (perfis mais finos que os do ObraTop 3) ──
+    // O perfil (coordenador, orcamentista ou projetista) fica em organizations/{org}/perfis/{uid},
+    // que só o proprietário grava — o próprio usuário não consegue se promover.
+    // O proprietário (role == 'owner') pode tudo, como sempre.
+    function perfilDe(orgId) {
+      return exists(/databases/$(database)/documents/organizations/$(orgId)/perfis/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/organizations/$(orgId)/perfis/$(request.auth.uid)).data.get('perfil', '')
+        : '';
+    }
+    function gestorAec(orgId) { return owner(orgId) || (member(orgId) && perfilDe(orgId) == 'coordenador'); }
+    function orcaAec(orgId) { return gestorAec(orgId) || (member(orgId) && perfilDe(orgId) == 'orcamentista'); }
+    function naoAltera(campos) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(campos); }
+
+    // CUB oficial: leitura para qualquer usuário autenticado; escrita só pelo script de importação.
+    match /cubTables/{tabelaId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    // Índice interno documento-de-assinatura → contrato (somente backend).
+    match /signatureRequests/{id} { allow read, write: if false; }
+
+    // Consultas que atravessam projetos (ART/RRT e horas de toda a empresa).
+    match /{path=**}/artRrt/{id} {
+      allow read: if resource.data.orgId is string && member(resource.data.orgId);
+    }
+    match /{path=**}/timesheets/{id} {
+      allow read: if resource.data.orgId is string && gestorAec(resource.data.orgId);
+    }

@@ -1,201 +1,347 @@
 rules_version = '2';
-// Isolamento multi-tenant: todo acesso é validado contra os custom claims do token
-// (tenantId + role), gravados exclusivamente pela Cloud Function `definirPapel`.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function autenticado() { return request.auth != null; }
-    function doTenant(tenantId) { return autenticado() && request.auth.token.tenantId == tenantId; }
-    function papel() { return request.auth.token.role; }
-    function temPapel(tenantId, papeis) { return doTenant(tenantId) && papel() in papeis; }
-    function equipe(tenantId) { return temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista', 'projetista']); }
-    function gestor(tenantId) { return temPapel(tenantId, ['socio_diretor', 'coordenador']); }
-    function socio(tenantId) { return temPapel(tenantId, ['socio_diretor']); }
-    function clienteDoProjeto(tenantId, projectId) {
-      return temPapel(tenantId, ['cliente'])
-        && request.auth.uid in get(/databases/$(database)/documents/tenants/$(tenantId)/projects/$(projectId)).data.clienteUids;
+    function signedIn() { return request.auth != null; }
+    function member(orgId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.status == 'active';
     }
-    // Campos que só o servidor pode alterar (status de assinatura, hash etc.).
-    function naoAltera(campos) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(campos); }
-
-    // CUB oficial: leitura para qualquer usuário autenticado; escrita só via Admin SDK (script de importação).
-    match /cubTables/{tabelaId} {
-      allow read: if autenticado();
-      allow write: if false;
+    function memberDoc(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data;
+    }
+    function owner(orgId) { return member(orgId) && memberDoc(orgId).role == 'owner'; }
+    function assigned(orgId, workId) {
+      return member(orgId) && workId is string && workId.size() > 0 &&
+        memberDoc(orgId).workId is string && memberDoc(orgId).workId == workId;
+    }
+    function validWorkRef(orgId, workId) {
+      return workId is string && workId.size() > 0 &&
+        existsAfter(/databases/$(database)/documents/organizations/$(orgId)/works/$(workId));
+    }
+    function validPercent(data, key) {
+      return !(key in data) || (data[key] is number && data[key] >= 0 && data[key] <= 100);
+    }
+    function validNonNegative(data, key) {
+      return !(key in data) || (data[key] is number && data[key] >= 0);
+    }
+    function validText(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+    function commonValid(data) {
+      return validText(data, 'workId', 160) &&
+        (!( 'deleted' in data) || data.deleted is bool);
+    }
+    function noDeleteOnCreate(orgId) { return owner(orgId) || request.resource.data.get('deleted', false) == false; }
+    function noDeleteOnUpdate(orgId) {
+      return owner(orgId) || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'deleted', 'deletedAt', 'deletedBy', 'deletedReason', 'deleteReason',
+        'duplicateOf', 'sanitizedAt', 'sanitizedBy', 'restoredAt', 'restoredBy'
+      ]);
+    }
+    function linkedCreate(orgId) {
+      let workId = request.resource.data.get('workId', '');
+      return commonValid(request.resource.data) && noDeleteOnCreate(orgId) && (
+        (owner(orgId) && (workId == '' || validWorkRef(orgId, workId))) ||
+        (validWorkRef(orgId, workId) && assigned(orgId, workId))
+      );
+    }
+    function linkedUpdate(orgId) {
+      let workId = request.resource.data.get('workId', '');
+      let oldWorkId = resource.data.get('workId', '');
+      return commonValid(request.resource.data) && noDeleteOnUpdate(orgId) && (
+        (owner(orgId) && (workId == '' || validWorkRef(orgId, workId))) ||
+        (workId == oldWorkId && validWorkRef(orgId, workId) && assigned(orgId, oldWorkId))
+      );
+    }
+    function linkedDelete(orgId) {
+      return owner(orgId);
     }
 
-    match /tenants/{tenantId} {
-      allow read: if doTenant(tenantId);
-      allow update: if socio(tenantId);
-      allow create, delete: if false; // provisionamento pelo backend
+    match /users/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+    match /users/{userId}/state/{stateId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
 
-      match /members/{uid} {
-        allow read: if equipe(tenantId) || (doTenant(tenantId) && request.auth.uid == uid);
-        allow write: if false; // papéis mudam só pela função `definirPapel` (claims + documento em transação)
+    match /invites/{code} {
+      allow get: if signedIn() && request.auth.token.email == resource.data.email && request.time < resource.data.expiresAt;
+      allow list: if false;
+      allow create: if signedIn() && owner(request.resource.data.orgId) &&
+        request.resource.data.role == 'project_user' &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 254 &&
+        request.resource.data.workId is string &&
+        exists(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)/works/$(request.resource.data.workId)) &&
+        request.resource.data.expiresAt is timestamp && request.resource.data.expiresAt > request.time;
+      allow delete: if signedIn() &&
+        (request.auth.token.email == resource.data.email || owner(resource.data.orgId));
+      allow update: if false;
+    }
+
+    match /organizations/{orgId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120;
+      allow read: if member(orgId);
+      allow update: if owner(orgId) && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if member(orgId);
+        allow create: if signedIn() && (
+          (request.auth.uid == memberId &&
+           getAfter(/databases/$(database)/documents/organizations/$(orgId)).data.ownerUid == request.auth.uid &&
+           request.resource.data.role == 'owner' && request.resource.data.status == 'active') ||
+          (request.auth.uid == memberId &&
+           request.resource.data.inviteCode is string &&
+           get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.orgId == orgId &&
+           get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.email == request.auth.token.email &&
+           get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.expiresAt > request.time &&
+           request.resource.data.role == 'project_user' &&
+           request.resource.data.workId == get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.workId &&
+           request.resource.data.status == 'active')
+        );
+        allow update: if owner(orgId) &&
+          resource.data.role != 'owner' && request.resource.data.role == 'project_user' &&
+          request.resource.data.email == resource.data.email &&
+          request.resource.data.inviteCode == resource.data.inviteCode &&
+          validWorkRef(orgId, request.resource.data.workId);
+        allow delete: if owner(orgId) && resource.data.role != 'owner';
       }
 
-      match /clients/{clientId} {
-        allow read: if equipe(tenantId);
-        allow create, update: if gestor(tenantId) || temPapel(tenantId, ['orcamentista']);
-        allow delete: if socio(tenantId);
+      match /works/{id} {
+        allow read: if member(orgId);
+        allow create: if owner(orgId) &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 180 &&
+          validPercent(request.resource.data, 'progress') && validNonNegative(request.resource.data, 'value');
+        allow update: if (owner(orgId) || assigned(orgId, id)) && noDeleteOnUpdate(orgId) &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 180 &&
+          validPercent(request.resource.data, 'progress') && validNonNegative(request.resource.data, 'value');
+        allow delete: if owner(orgId);
       }
 
-      match /cubOverrides/{tabelaId} {
-        allow read: if equipe(tenantId);
-        allow write: if socio(tenantId);
+      match /measurements/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validPercent(request.resource.data,'physical') && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validPercent(request.resource.data,'physical') && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /budgets/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'qty') && validNonNegative(request.resource.data,'unitValue') && validPercent(request.resource.data,'bdi'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'qty') && validNonNegative(request.resource.data,'unitValue') && validPercent(request.resource.data,'bdi'); allow delete: if linkedDelete(orgId); }
+      match /activities/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validPercent(request.resource.data,'progress') && validNonNegative(request.resource.data,'durationDays') && validNonNegative(request.resource.data,'plannedQty') && validNonNegative(request.resource.data,'actualQty'); allow update: if linkedUpdate(orgId) && validPercent(request.resource.data,'progress') && validNonNegative(request.resource.data,'durationDays') && validNonNegative(request.resource.data,'plannedQty') && validNonNegative(request.resource.data,'actualQty'); allow delete: if linkedDelete(orgId); }
+      match /orders/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /inventory/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'currentStock') && validNonNegative(request.resource.data,'minStock') && validNonNegative(request.resource.data,'maxStock') && validNonNegative(request.resource.data,'unitValue'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'currentStock') && validNonNegative(request.resource.data,'minStock') && validNonNegative(request.resource.data,'maxStock') && validNonNegative(request.resource.data,'unitValue'); allow delete: if linkedDelete(orgId); }
+      match /finance/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /quality/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId); allow update: if linkedUpdate(orgId); allow delete: if linkedDelete(orgId); }
+      match /contracts/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'value'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'value'); allow delete: if linkedDelete(orgId); }
+      match /staff/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'salary'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'salary'); allow delete: if linkedDelete(orgId); }
+      match /equipment/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data,'monthlyCost') && validNonNegative(request.resource.data,'hourmeter'); allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data,'monthlyCost') && validNonNegative(request.resource.data,'hourmeter'); allow delete: if linkedDelete(orgId); }
+      match /safety/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId); allow update: if linkedUpdate(orgId); allow delete: if linkedDelete(orgId); }
+      match /documents/{id} { allow read: if member(orgId); allow create: if linkedCreate(orgId); allow update: if linkedUpdate(orgId); allow delete: if linkedDelete(orgId); }
+
+      match /suppliers/{id} {
+        allow read: if member(orgId);
+        allow create, update: if owner(orgId) && validText(request.resource.data,'name',180) && validText(request.resource.data,'cnpj',32);
+        allow delete: if owner(orgId);
       }
 
-      // Gestão de obras (módulos herdados do ObraTop): mesmas coleções e campos do aplicativo original.
-      // O filtro pelo nome da coleção impede que esta regra genérica alcance qualquer outra coleção.
-      match /{colecao}/{id} {
-        function moduloObra() {
-          return colecao in ['works', 'measurements', 'budgets', 'activities', 'dailyLogs', 'orders', 'inventory',
-            'finance', 'quality', 'contracts', 'staff', 'equipment', 'safety', 'documents'];
+      match /progressSnapshots/{id} {
+        allow read: if member(orgId);
+        allow create: if commonValid(request.resource.data) && noDeleteOnCreate(orgId) && validWorkRef(orgId, request.resource.data.workId) &&
+          (owner(orgId) || assigned(orgId, request.resource.data.workId)) &&
+          request.resource.data.date is string && validPercent(request.resource.data,'physicalPlanned') && validPercent(request.resource.data,'physicalActual') &&
+          validNonNegative(request.resource.data,'budget') && validNonNegative(request.resource.data,'paid');
+        allow update: if commonValid(request.resource.data) && noDeleteOnUpdate(orgId) && validWorkRef(orgId, request.resource.data.workId) &&
+          (owner(orgId) || assigned(orgId, request.resource.data.workId)) &&
+          request.resource.data.date is string && validPercent(request.resource.data,'physicalPlanned') && validPercent(request.resource.data,'physicalActual') &&
+          validNonNegative(request.resource.data,'budget') && validNonNegative(request.resource.data,'paid');
+        allow delete: if owner(orgId);
+      }
+
+      match /systemOperations/{id} {
+        allow read, create, update: if owner(orgId);
+        allow delete: if false;
+      }
+
+      match /restorePoints/{pointId} {
+        allow read: if member(orgId);
+        allow create, update, delete: if owner(orgId);
+        match /chunks/{chunkId} {
+          allow read: if member(orgId);
+          allow create, delete: if owner(orgId);
+          allow update: if false;
         }
-        function moduloRestrito() { return colecao in ['suppliers']; } // no ObraTop: só o proprietário
-        allow read: if (moduloObra() || moduloRestrito()) && equipe(tenantId);
-        allow create, update: if request.resource.data.tenantId == tenantId
-          && ((moduloObra() && equipe(tenantId)) || (moduloRestrito() && gestor(tenantId)));
-        // A exclusão comum é lógica (campo `deleted`); apagar de verdade é só do Sócio-Diretor.
-        allow delete: if (moduloObra() || moduloRestrito()) && socio(tenantId);
       }
 
-      // Cotações por cliente (serviços + medidas) e parâmetros de preço do escritório.
-      match /cotacoes/{id} {
-        allow read: if equipe(tenantId);
-        allow create, update: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
-          && request.resource.data.tenantId == tenantId
-          && request.resource.data.itens is list && request.resource.data.itens.size() <= 500;
-        allow delete: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista']);
-      }
-      match /config/{id} {
-        allow read: if equipe(tenantId);
-        allow write: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
-          && request.resource.data.tenantId == tenantId;
+      match /restoreHistory/{historyId} {
+        allow read: if member(orgId);
+        allow create: if owner(orgId);
+        allow update, delete: if false;
       }
 
-      // Item de quantitativo → composição de preço. Vale para todos os projetos do tenant.
-      match /vinculos/{id} {
-        allow read: if equipe(tenantId);
-        allow create, update: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
-          && request.resource.data.tenantId == tenantId
-          && request.resource.data.estado == 'confirmado'
-          && request.resource.data.fator is number && request.resource.data.fator > 0;
-        allow delete: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista']);
+      match /engineeringProjects/{projectId} {
+        allow read: if member(orgId);
+        allow create: if linkedCreate(orgId);
+        allow update: if linkedUpdate(orgId);
+        allow delete: if owner(orgId);
+        match /takeoffs/{takeoffId} {
+          allow read: if member(orgId);
+          allow create: if member(orgId) && noDeleteOnCreate(orgId) &&
+            getAfter(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId is string &&
+            (owner(orgId) || assigned(orgId, getAfter(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId));
+          allow update: if member(orgId) && noDeleteOnUpdate(orgId) &&
+            get(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId is string &&
+            (owner(orgId) || assigned(orgId, get(/databases/$(database)/documents/organizations/$(orgId)/engineeringProjects/$(projectId)).data.workId));
+          allow delete: if owner(orgId);
+        }
       }
 
+      match /audits/{id} {
+        allow read: if owner(orgId);
+        allow create: if member(orgId) && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+      // >>> EXTENSÃO ObraTop 4 (gerada — não edite aqui)
+      // Perfil de cada pessoa nos módulos novos: só o proprietário define.
+      match /perfis/{uid} {
+        allow read: if member(orgId);
+        allow create, update: if owner(orgId) && request.resource.data.keys().hasOnly(['perfil']) &&
+          request.resource.data.perfil in ['', 'coordenador', 'orcamentista', 'projetista'];
+        allow delete: if owner(orgId);
+      }
+      // ── Projetos (escritório): briefing, CAD, quantitativos, orçamento, contrato, ART, horas ──
+      match /clients/{clientId} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId);
+        allow delete: if owner(orgId);
+      }
       match /projects/{projectId} {
-        allow read: if equipe(tenantId)
-          || (temPapel(tenantId, ['cliente']) && request.auth.uid in resource.data.clienteUids);
-        allow create, update: if gestor(tenantId);
-        allow delete: if socio(tenantId);
+        allow read: if member(orgId);
+        allow create, update: if gestorAec(orgId);
+        allow delete: if owner(orgId);
 
         match /briefings/{id} {
-          allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
-          allow write: if gestor(tenantId);
+          allow read: if member(orgId);
+          allow write: if gestorAec(orgId);
         }
-
         match /files/{fileId} {
-          allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
-          allow delete: if gestor(tenantId);
+          allow read: if member(orgId);
+          allow delete: if gestorAec(orgId);
           allow create, update: if false; // criados pela função que processa o upload
-
           match /versions/{rev} {
-            allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
+            allow read: if member(orgId);
             allow write: if false; // revisões são imutáveis
           }
         }
-
-        // Quantitativos unificados por arquivo importado (IFC, DXF, LandXML, .inp, planilhas).
         match /quantities/{id} {
-          allow read: if equipe(tenantId);
-          allow create, update: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
-            && request.resource.data.tenantId == tenantId
-            && request.resource.data.itens is list && request.resource.data.itens.size() <= 5000;
-          allow delete: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista']);
+          allow read: if member(orgId);
+          allow create, update: if orcaAec(orgId) && request.resource.data.itens is list && request.resource.data.itens.size() <= 5000;
+          allow delete: if orcaAec(orgId);
         }
-
         match /redlines/{id} {
-          allow read: if equipe(tenantId) || clienteDoProjeto(tenantId, projectId);
-          allow create: if (equipe(tenantId) || clienteDoProjeto(tenantId, projectId))
-            && request.resource.data.autorUid == request.auth.uid;
-          allow delete: if gestor(tenantId) || (doTenant(tenantId) && resource.data.autorUid == request.auth.uid);
+          allow read: if member(orgId);
+          allow create: if member(orgId) && request.resource.data.autorUid == request.auth.uid;
+          allow delete: if gestorAec(orgId) || (member(orgId) && resource.data.autorUid == request.auth.uid);
           allow update: if false;
         }
-
+        // Orçamentos do PROJETO (CUB). Os itens de orçamento da OBRA continuam em /budgets do ObraTop.
         match /budgets/{id} {
-          allow read: if equipe(tenantId)
-            || (clienteDoProjeto(tenantId, projectId) && resource.data.status in ['enviado', 'aprovado']);
-          allow create: if temPapel(tenantId, ['socio_diretor', 'coordenador', 'orcamentista'])
-            && request.resource.data.status == 'rascunho';
-          // Orçamentista edita; aprovação interna só do sócio; o cliente só pode aprovar um orçamento enviado.
-          allow update: if (temPapel(tenantId, ['coordenador', 'orcamentista'])
-              && request.resource.data.status in ['rascunho', 'enviado'] && resource.data.status != 'aprovado')
-            || socio(tenantId)
-            || (clienteDoProjeto(tenantId, projectId) && resource.data.status == 'enviado'
-              && request.resource.data.status == 'aprovado'
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'aprovadoPor', 'aprovadoEm']));
-          allow delete: if socio(tenantId);
+          allow read: if member(orgId);
+          allow create: if orcaAec(orgId) && request.resource.data.status == 'rascunho';
+          allow update: if owner(orgId)
+            || (orcaAec(orgId) && request.resource.data.status in ['rascunho', 'enviado'] && resource.data.status != 'aprovado');
+          allow delete: if owner(orgId);
         }
-
         match /contracts/{id} {
-          allow read: if gestor(tenantId) || temPapel(tenantId, ['orcamentista'])
-            || (clienteDoProjeto(tenantId, projectId) && resource.data.status in ['enviado_assinatura', 'assinado']);
-          allow create: if gestor(tenantId) && request.resource.data.status == 'rascunho';
+          allow read: if orcaAec(orgId);
+          allow create: if gestorAec(orgId) && request.resource.data.status == 'rascunho';
           // Só rascunhos são editáveis; status, hash e assinatura são do servidor.
-          allow update: if gestor(tenantId) && resource.data.status == 'rascunho'
-            && naoAltera(['status', 'sha256', 'assinatura']);
-          allow delete: if socio(tenantId) && resource.data.status == 'rascunho';
+          allow update: if gestorAec(orgId) && resource.data.status == 'rascunho' && naoAltera(['status', 'sha256', 'assinatura']);
+          allow delete: if owner(orgId) && resource.data.status == 'rascunho';
         }
-
         match /artRrt/{id} {
-          allow read: if equipe(tenantId);
-          // `tenantId` no documento é exigido pelas consultas collectionGroup (regra no fim do arquivo).
-          allow create, update: if gestor(tenantId) && request.resource.data.tenantId == tenantId;
-          allow delete: if gestor(tenantId);
+          allow read: if member(orgId);
+          allow create, update: if gestorAec(orgId) && request.resource.data.orgId == orgId;
+          allow delete: if gestorAec(orgId);
         }
-
         match /timesheets/{id} {
-          // Cada um vê e lança as próprias horas; gestores veem tudo (margem do projeto).
-          allow read: if gestor(tenantId) || (equipe(tenantId) && resource.data.uid == request.auth.uid);
-          allow create: if equipe(tenantId) && request.resource.data.uid == request.auth.uid
-            && request.resource.data.tenantId == tenantId
-            && request.resource.data.minutos is number && request.resource.data.minutos > 0
-            && request.resource.data.minutos <= 1440;
-          allow update: if (gestor(tenantId) || (equipe(tenantId) && resource.data.uid == request.auth.uid))
-            && naoAltera(['uid', 'tenantId']);
-          allow delete: if gestor(tenantId) || (equipe(tenantId) && resource.data.uid == request.auth.uid);
+          allow read: if gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid);
+          allow create: if member(orgId) && request.resource.data.uid == request.auth.uid
+            && request.resource.data.orgId == orgId
+            && request.resource.data.minutos is number && request.resource.data.minutos > 0 && request.resource.data.minutos <= 1440;
+          allow update: if (gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid)) && naoAltera(['uid', 'orgId']);
+          allow delete: if gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid);
         }
       }
 
+      // ── Orçamentação: cotações, parâmetros de preço, vínculos de composição, ajustes de CUB ──
+      match /cotacoes/{id} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId) && request.resource.data.itens is list && request.resource.data.itens.size() <= 500;
+        allow delete: if orcaAec(orgId);
+      }
+      match /config/{id} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId);
+        allow delete: if false;
+      }
+      match /vinculos/{id} {
+        allow read: if member(orgId);
+        allow create, update: if orcaAec(orgId) && request.resource.data.estado == 'confirmado'
+          && request.resource.data.fator is number && request.resource.data.fator > 0;
+        allow delete: if orcaAec(orgId);
+      }
+      match /cubOverrides/{tabelaId} {
+        allow read: if member(orgId);
+        allow write: if owner(orgId);
+      }
+
+      // ── Notificações e trilha de auditoria do servidor ──
       match /notifications/{id} {
-        allow read: if equipe(tenantId)
-          || (temPapel(tenantId, ['cliente']) && request.auth.uid in resource.data.destinatarios);
+        allow read: if member(orgId);
         // O usuário só pode marcar a notificação como lida para si mesmo.
-        allow update: if doTenant(tenantId)
+        allow update: if member(orgId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lidaPor'])
           && request.resource.data.lidaPor.toSet().difference(resource.data.lidaPor.toSet()) == [request.auth.uid].toSet();
         allow create, delete: if false;
       }
-
-      // Trilha de auditoria: escrita somente pelo Admin SDK; ninguém edita nem apaga.
       match /auditLogs/{id} {
-        allow read: if socio(tenantId);
+        allow read: if owner(orgId);
         allow write: if false;
       }
+      // Diário de obra: mesmas condições dos demais registros ligados a uma obra.
+      match /dailyLogs/{id} {
+        allow read: if member(orgId);
+        allow create: if linkedCreate(orgId) && validNonNegative(request.resource.data, 'laborCount') && validNonNegative(request.resource.data, 'equipmentCount') && validPercent(request.resource.data, 'progressTo');
+        allow update: if linkedUpdate(orgId) && validNonNegative(request.resource.data, 'laborCount') && validNonNegative(request.resource.data, 'equipmentCount') && validPercent(request.resource.data, 'progressTo');
+        allow delete: if linkedDelete(orgId);
+      }
+      // <<< EXTENSÃO ObraTop 4
     }
+    // >>> EXTENSÃO ObraTop 4 (gerada — não edite aqui)
+    // ── Funções auxiliares dos módulos novos (perfis mais finos que os do ObraTop 3) ──
+    // O perfil (coordenador, orcamentista ou projetista) fica em organizations/{org}/perfis/{uid},
+    // que só o proprietário grava — o próprio usuário não consegue se promover.
+    // O proprietário (role == 'owner') pode tudo, como sempre.
+    function perfilDe(orgId) {
+      return exists(/databases/$(database)/documents/organizations/$(orgId)/perfis/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/organizations/$(orgId)/perfis/$(request.auth.uid)).data.get('perfil', '')
+        : '';
+    }
+    function gestorAec(orgId) { return owner(orgId) || (member(orgId) && perfilDe(orgId) == 'coordenador'); }
+    function orcaAec(orgId) { return gestorAec(orgId) || (member(orgId) && perfilDe(orgId) == 'orcamentista'); }
+    function naoAltera(campos) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(campos); }
 
+    // CUB oficial: leitura para qualquer usuário autenticado; escrita só pelo script de importação.
+    match /cubTables/{tabelaId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
     // Índice interno documento-de-assinatura → contrato (somente backend).
     match /signatureRequests/{id} { allow read, write: if false; }
 
-    // Consultas collectionGroup (ex.: ART/RRT de todos os projetos do tenant).
+    // Consultas que atravessam projetos (ART/RRT e horas de toda a empresa).
     match /{path=**}/artRrt/{id} {
-      allow read: if autenticado() && resource.data.tenantId == request.auth.token.tenantId
-        && papel() in ['socio_diretor', 'coordenador', 'orcamentista', 'projetista'];
+      allow read: if resource.data.orgId is string && member(resource.data.orgId);
     }
     match /{path=**}/timesheets/{id} {
-      allow read: if autenticado() && resource.data.tenantId == request.auth.token.tenantId
-        && papel() in ['socio_diretor', 'coordenador'];
+      allow read: if resource.data.orgId is string && gestorAec(resource.data.orgId);
     }
+    // <<< EXTENSÃO ObraTop 4
   }
 }
