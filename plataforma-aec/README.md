@@ -62,6 +62,13 @@ O mapa das áreas fica em `src/lib/modulos.ts`; os indicadores, em `src/lib/indi
 
 Os arquivos são lidos no navegador; nada é enviado a terceiros (exceto a consulta de CNPJ, à BrasilAPI).
 
+## Manual do usuário
+
+`public/manual-obratop.pdf` (50 páginas, ilustrado) abre pelo botão **?** no topo do aplicativo.
+Para refazer depois de mudar telas: compile em modo demonstração, sirva `out/` em `:4199` e rode
+`node manual/capturar-telas.cjs <pasta>` (crie `<pasta>/img` antes), `node manual/capturar-login.cjs <pasta>`
+e `node manual/gerar-manual.cjs <pasta>/img public/manual-obratop.pdf`.
+
 ## Desenvolvimento
 
 ```bash

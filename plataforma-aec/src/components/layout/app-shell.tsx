@@ -3,7 +3,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bell, ChevronRight, LogOut, Menu, Moon, Search, Sun, X } from 'lucide-react';
+import { Bell, ChevronRight, CircleHelp, LogOut, Menu, Moon, Search, Sun, X } from 'lucide-react';
 import { Onboarding } from '@/components/layout/onboarding';
 import { Paleta } from '@/components/layout/paleta';
 import { Button } from '@/components/ui/button';
@@ -174,6 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <kbd className="hidden rounded border px-1.5 py-0.5 text-[10px] sm:block">Ctrl K</kbd>
           </button>
           {MODO_DEMO && <Badge variant="warning" className="hidden md:inline-flex">Modo demonstração · dados fictícios</Badge>}
+          <a href="/manual-obratop.pdf" target="_blank" rel="noreferrer" aria-label="Manual do usuário (PDF)" title="Manual do usuário" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><CircleHelp className="h-4 w-4" /></a>
           <Notificacoes />
           <Button variant="ghost" size="icon" aria-label="Alternar tema claro/escuro" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
             <Sun className="hidden h-4 w-4 dark:block" /><Moon className="h-4 w-4 dark:hidden" />
