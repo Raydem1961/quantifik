@@ -15,13 +15,15 @@ export function Onboarding() {
   const [codigo, setCodigo] = React.useState('');
   const [estado, setEstado] = React.useState<{ ocupado?: boolean; erro?: string }>({});
   React.useEffect(() => {
-    const c = new URLSearchParams(window.location.search).get('convite');
+    let c = new URLSearchParams(window.location.search).get('convite');
+    try { c = c || sessionStorage.getItem('obratop.convite'); } catch { /* sem armazenamento */ }
     if (c) { setCodigo(c); setModo('convite'); }
   }, []);
   const enviar = async () => {
     setEstado({ ocupado: true });
     try {
       if (modo === 'empresa') await criarEmpresa(nome, cnpj); else await aceitarConvite(codigo);
+      try { sessionStorage.removeItem('obratop.convite'); } catch { /* sem armazenamento */ }
       recarregar();
     } catch (e) { setEstado({ erro: e instanceof Error && !/permission/i.test(e.message) ? e.message : 'Não foi possível concluir. Confira os dados e tente de novo.' }); }
   };

@@ -122,6 +122,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [gaveta, setGaveta] = React.useState(false);
   const [areaLembrada, setAreaLembrada] = React.useState<string>();
 
+  React.useEffect(() => {
+    // O link de convite sobrevive ao login: o código fica guardado até a pessoa entrar.
+    try { const c = new URLSearchParams(window.location.search).get('convite'); if (c && /^[A-Za-z0-9_-]{6,80}$/.test(c)) sessionStorage.setItem('obratop.convite', c); } catch { /* sem armazenamento */ }
+  }, []);
   React.useEffect(() => { if (!carregando && !usuario) router.replace('/login/'); }, [carregando, usuario, router]);
   React.useEffect(() => { try { setAreaLembrada(sessionStorage.getItem(CHAVE_AREA) ?? undefined); } catch { /* sem armazenamento */ } setGaveta(false); }, [caminho]);
   React.useEffect(() => {

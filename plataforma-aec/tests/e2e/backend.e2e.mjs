@@ -96,29 +96,32 @@ const INP = '[OPTIONS]\nUnits LPS\n[JUNCTIONS]\nN1 10 1\n[PIPES]\nP1 N1 N2 250 1
 try {
   await limpar();
   const T = 'escritorio-a';
-  await adb.doc(`tenants/${T}`).set({ nomeFantasia: 'Escritório A', webhookUrl: 'http://127.0.0.1:4181/notificacoes', custoHoraTecnica: 90 });
-  await adb.doc('tenants/escritorio-b').set({ nomeFantasia: 'Escritório B' });
-  await adb.doc(`tenants/${T}/projects/p1`).set({ nome: 'Projeto 1', status: 'briefing', clienteUids: [], tenantId: T });
-  const uidSocio = await usuario('socio@a.test', { tenantId: T, role: 'socio_diretor' });
-  await adb.doc(`tenants/${T}/members/${uidSocio}`).set({ uid: uidSocio, role: 'socio_diretor', ativo: true });
+  const O = `organizations/${T}`;
+  const uidSocio = await usuario('socio@a.test');
   const uidNovo = await usuario('novo@a.test');
-  const uidOutro = await usuario('socio@b.test', { tenantId: 'escritorio-b', role: 'socio_diretor' });
+  const uidOutro = await usuario('socio@b.test');
+  await adb.doc(O).set({ name: 'Escritório A', ownerUid: uidSocio, aec: { webhookUrl: 'http://127.0.0.1:4181/notificacoes', custoHoraTecnica: 90 } });
+  await adb.doc('organizations/escritorio-b').set({ name: 'Escritório B', ownerUid: uidOutro });
+  await adb.doc(`${O}/works/w1`).set({ name: 'Obra 1' });
+  await adb.doc(`${O}/members/${uidSocio}`).set({ role: 'owner', status: 'active', email: 'socio@a.test' });
+  await adb.doc(`${O}/members/${uidNovo}`).set({ role: 'project_user', status: 'active', workId: 'w1', email: 'novo@a.test' });
+  await adb.doc(`organizations/escritorio-b/members/${uidOutro}`).set({ role: 'owner', status: 'active', email: 'socio@b.test' });
+  await adb.doc(`${O}/projects/p1`).set({ nome: 'Projeto 1', status: 'briefing' });
 
   const socio = cliente('socio');
   await signInWithEmailAndPassword(socio.auth, 'socio@a.test', 'senha-teste-123');
-  const P = `tenants/${T}/projects/p1`;
-
-  console.log('\n1. RBAC — definirPapel');
-  const definir = httpsCallable(socio.fn, 'definirPapel');
-  await definir({ uid: uidNovo, role: 'projetista' });
-  checar('claims gravadas no usuário', (await adminAuth().getUser(uidNovo)).customClaims?.role === 'projetista');
-  checar('documento de membro criado', (await adb.doc(`tenants/${T}/members/${uidNovo}`).get()).data()?.role === 'projetista');
-  checar('não sequestra usuário de outro tenant', await rejeita(definir({ uid: uidOutro, role: 'projetista' })));
-  checar('papel inválido é recusado', await rejeita(definir({ uid: uidNovo, role: 'admin' })));
-  checar('último sócio não pode se rebaixar', await rejeita(definir({ uid: uidSocio, role: 'projetista' })));
   const novo = cliente('novo');
   await signInWithEmailAndPassword(novo.auth, 'novo@a.test', 'senha-teste-123');
-  checar('projetista não gerencia equipe', await rejeita(httpsCallable(novo.fn, 'definirPapel')({ uid: uidNovo, role: 'socio_diretor' })));
+  const P = `${O}/projects/p1`;
+
+  console.log('\n1. Papéis — cadastro de membros do ObraTop + perfil');
+  checar('usuário de obra não altera projeto', await rejeita(updateDoc(doc(novo.db, P), { status: 'concluido' })));
+  checar('usuário de obra não define o próprio perfil', await rejeita(setDoc(doc(novo.db, `${O}/perfis/${uidNovo}`), { perfil: 'coordenador' })));
+  await setDoc(doc(socio.db, `${O}/perfis/${uidNovo}`), { perfil: 'coordenador' });
+  await updateDoc(doc(novo.db, P), { status: 'estudo_preliminar' });
+  checar('proprietário promove a coordenador, que passa a gerir projetos', (await adb.doc(P).get()).data()?.status === 'estudo_preliminar');
+  await setDoc(doc(socio.db, `${O}/perfis/${uidNovo}`), { perfil: 'projetista' });
+  checar('rebaixado a projetista, perde a permissão na hora', await rejeita(updateDoc(doc(novo.db, P), { status: 'concluido' })));
 
   console.log('\n2. Upload de CAD → versionamento + quantitativos');
   const enviar = (c, nome, conteudo, uid) => uploadString(ref(c.storage, `${P}/cad/arquitetonico/${Date.now()}__${nome}`), conteudo, 'raw', { customMetadata: { uid } });
@@ -149,30 +152,30 @@ try {
   checar('extensão não permitida é barrada pelas regras', await rejeita(uploadString(ref(novo.storage, `${P}/cad/arquitetonico/1__virus.exe`), 'x', 'raw', { customMetadata: { uid: uidNovo } })));
   const b = cliente('b');
   await signInWithEmailAndPassword(b.auth, 'socio@b.test', 'senha-teste-123');
-  checar('outro tenant não envia arquivo para este projeto', await rejeita(uploadString(ref(b.storage, `${P}/cad/arquitetonico/2__a.dxf`), DXF, 'raw', { customMetadata: { uid: uidOutro } })));
+  checar('outra empresa não envia arquivo para este projeto', await rejeita(uploadString(ref(b.storage, `${P}/cad/arquitetonico/2__a.dxf`), DXF, 'raw', { customMetadata: { uid: uidOutro } })));
 
   console.log('\n3. Notificações e webhook');
-  const notifs = await ate('notificações de CAD', async () => { const s = await adb.collection(`tenants/${T}/notifications`).where('tipo', '==', 'cad_atualizado').get(); return s.size >= 4 ? s.docs : null; });
+  const notifs = await ate('notificações de CAD', async () => { const s = await adb.collection(`${O}/notifications`).where('tipo', '==', 'cad_atualizado').get(); return s.size >= 4 ? s.docs : null; });
   checar('notificação criada a cada upload', (notifs?.length ?? 0) >= 4);
   const wh = await ate('webhook', async () => (recebidos.webhook.length >= 4 ? recebidos.webhook : null));
   const primeiro = wh?.[0];
-  checar('webhook entregue ao destino do tenant', !!primeiro && primeiro.json.tenantId === T);
+  checar('webhook entregue ao destino da empresa', !!primeiro && primeiro.json.tenantId === T);
   checar('webhook assinado com HMAC-SHA256 válido', !!primeiro && primeiro.assinatura === `sha256=${createHmac('sha256', 'chave-webhook-teste').update(primeiro.bruto).digest('hex')}`);
 
   console.log('\n4. Orçamento: auditoria e aprovação');
-  const orc = await addDoc(collection(socio.db, `${P}/budgets`), { titulo: 'Orçamento CUB', status: 'rascunho', total: 1000, tenantId: T });
+  const orc = await addDoc(collection(socio.db, `${P}/budgets`), { titulo: 'Orçamento CUB', status: 'rascunho', total: 1000, orgId: T });
   await updateDoc(orc, { status: 'aprovado', total: 1200 });
-  const logs = await ate('auditoria do orçamento', async () => { const s = await adb.collection(`tenants/${T}/auditLogs`).where('recurso', '==', 'orcamento').get(); return s.size >= 2 ? s.docs.map((d) => d.data()) : null; });
+  const logs = await ate('auditoria do orçamento', async () => { const s = await adb.collection(`${O}/auditLogs`).where('recurso', '==', 'orcamento').get(); return s.size >= 2 ? s.docs.map((d) => d.data()) : null; });
   const upd = logs?.find((l) => l.acao === 'update');
   checar('criação e alteração auditadas', !!logs?.find((l) => l.acao === 'create') && !!upd);
   // O emulador do Firestore não repassa a identidade real ao gatilho (envia um autor fictício);
   // por isso aqui só se confere que o campo é preenchido. O uid real só existe em produção.
   checar('log guarda autor, antes e depois', !!upd?.uid && upd?.antes?.total === 1000 && upd?.depois?.total === 1200, JSON.stringify(upd));
-  checar('notificação de orçamento aprovado', !!(await ate('notif. aprovado', async () => { const s = await adb.collection(`tenants/${T}/notifications`).where('tipo', '==', 'orcamento_aprovado').get(); return s.size === 1; })));
-  await setDoc(doc(socio.db, `tenants/${T}/cubOverrides/BA_2026-11`), { uf: 'BA', ajuste: 1.05 });
-  checar('alteração de CUB auditada', !!(await ate('auditoria CUB', async () => !(await adb.collection(`tenants/${T}/auditLogs`).where('recurso', '==', 'cub').get()).empty)));
+  checar('notificação de orçamento aprovado', !!(await ate('notif. aprovado', async () => { const s = await adb.collection(`${O}/notifications`).where('tipo', '==', 'orcamento_aprovado').get(); return s.size === 1; })));
+  await setDoc(doc(socio.db, `${O}/cubOverrides/BA_2026-11`), { uf: 'BA', ajuste: 1.05 });
+  checar('alteração de CUB auditada', !!(await ate('auditoria CUB', async () => !(await adb.collection(`${O}/auditLogs`).where('recurso', '==', 'cub').get()).empty)));
   await deleteDoc(doc(socio.db, `${P}/files/arquitetonico-forma-dwg`));
-  const del = await ate('auditoria de exclusão', async () => { const s = await adb.collection(`tenants/${T}/auditLogs`).where('recurso', '==', 'arquivo_cad').get(); return s.empty ? null : s.docs[0].data(); });
+  const del = await ate('auditoria de exclusão', async () => { const s = await adb.collection(`${O}/auditLogs`).where('recurso', '==', 'arquivo_cad').get(); return s.empty ? null : s.docs[0].data(); });
   checar('exclusão de arquivo CAD auditada, com o conteúdo excluído', del?.acao === 'delete' && !!del?.uid && del?.antes?.nome === 'forma.dwg', JSON.stringify(del));
 
   console.log('\n5. Assinatura digital');
@@ -180,12 +183,12 @@ try {
   const sha = createHash('sha256').update(pdf).digest('hex');
   const pdfPath = `${P}/docs/contrato-teste.pdf`;
   await uploadBytes(ref(socio.storage, pdfPath), pdf, { contentType: 'application/pdf' });
-  const contrato = await addDoc(collection(socio.db, `${P}/contracts`), { projectId: 'p1', titulo: 'Contrato teste', template: 'x', status: 'rascunho', tenantId: T });
+  const contrato = await addDoc(collection(socio.db, `${P}/contracts`), { projectId: 'p1', titulo: 'Contrato teste', template: 'x', status: 'rascunho', orgId: T });
   const solicitar = httpsCallable(socio.fn, 'solicitarAssinatura');
   const signatarios = [{ nome: 'Cliente', email: 'cliente@x.test', papel: 'contratante' }, { nome: 'RT', email: 'rt@a.test', papel: 'contratada' }];
-  const pedido = { projectId: 'p1', contractId: contrato.id, pdfPath, signatarios };
+  const pedido = { orgId: T, projectId: 'p1', contractId: contrato.id, pdfPath, signatarios };
   checar('hash divergente é recusado', await rejeita(solicitar({ ...pedido, sha256: 'f'.repeat(64) })));
-  checar('PDF de outro projeto é recusado', await rejeita(solicitar({ ...pedido, sha256: sha, pdfPath: 'tenants/escritorio-b/projects/x/docs/a.pdf' })));
+  checar('PDF de outro projeto é recusado', await rejeita(solicitar({ ...pedido, sha256: sha, pdfPath: 'organizations/escritorio-b/projects/x/docs/a.pdf' })));
   checar('projetista não envia contrato', await rejeita(httpsCallable(novo.fn, 'solicitarAssinatura')({ ...pedido, sha256: sha })));
   checar('nenhuma chamada ao provedor nas tentativas recusadas', recebidos.clicksign.length === 0);
   const resp = await solicitar({ ...pedido, sha256: sha });
@@ -208,19 +211,19 @@ try {
   const bom = await postar(evento, createHmac('sha256', 'hmac-teste').update(evento).digest('hex'));
   checar('webhook legítimo → 200', bom.status === 200, String(bom.status));
   checar('contrato marcado como assinado', (await adb.doc(contrato.path).get()).data()?.status === 'assinado');
-  checar('notificação de contrato assinado', !!(await ate('notif. assinado', async () => !(await adb.collection(`tenants/${T}/notifications`).where('tipo', '==', 'contrato_assinado').get()).empty)));
-  checar('contrato auditado (criação → envio → assinatura)', (await ate('auditoria contrato', async () => { const s = await adb.collection(`tenants/${T}/auditLogs`).where('recurso', '==', 'contrato').get(); return s.size >= 3 ? s.size : null; })) >= 3);
+  checar('notificação de contrato assinado', !!(await ate('notif. assinado', async () => !(await adb.collection(`${O}/notifications`).where('tipo', '==', 'contrato_assinado').get()).empty)));
+  checar('contrato auditado (criação → envio → assinatura)', (await ate('auditoria contrato', async () => { const s = await adb.collection(`${O}/auditLogs`).where('recurso', '==', 'contrato').get(); return s.size >= 3 ? s.size : null; })) >= 3);
 
   console.log('\n6. Alertas diários de ART/RRT');
   const dia = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-  await adb.doc(`${P}/artRrt/vencendo`).set({ tenantId: T, projectId: 'p1', projetoNome: 'Projeto 1', tipo: 'ART', disciplina: 'estrutural', etapa: 'Executivo', status: 'a_emitir', vencimento: dia(3) });
-  await adb.doc(`${P}/artRrt/longe`).set({ tenantId: T, projectId: 'p1', tipo: 'ART', disciplina: 'eletrico', etapa: 'EP', status: 'a_emitir', vencimento: dia(40) });
-  await adb.doc(`${P}/artRrt/quitada`).set({ tenantId: T, projectId: 'p1', tipo: 'RRT', disciplina: 'arquitetonico', etapa: 'AP', status: 'paga', vencimento: dia(-5) });
+  await adb.doc(`${P}/artRrt/vencendo`).set({ orgId: T, projectId: 'p1', projetoNome: 'Projeto 1', tipo: 'ART', disciplina: 'estrutural', etapa: 'Executivo', status: 'a_emitir', vencimento: dia(3) });
+  await adb.doc(`${P}/artRrt/longe`).set({ orgId: T, projectId: 'p1', tipo: 'ART', disciplina: 'eletrico', etapa: 'EP', status: 'a_emitir', vencimento: dia(40) });
+  await adb.doc(`${P}/artRrt/quitada`).set({ orgId: T, projectId: 'p1', tipo: 'RRT', disciplina: 'arquitetonico', etapa: 'AP', status: 'paga', vencimento: dia(-5) });
   // Funções agendadas não disparam no emulador: executa o mesmo código compilado diretamente.
   const fns = createRequire(import.meta.url)('../../functions/lib/index.js');
   await fns.alertasArtRrt.run({});
   await fns.alertasArtRrt.run({});
-  const alertas = (await adb.collection(`tenants/${T}/notifications`).where('tipo', '==', 'art_vencendo').get()).docs.map((d) => d.data());
+  const alertas = (await adb.collection(`${O}/notifications`).where('tipo', '==', 'art_vencendo').get()).docs.map((d) => d.data());
   checar('alerta só para ART pendente vencendo em 7 dias', alertas.length === 1 && /ART a emitir/.test(alertas[0].titulo), JSON.stringify(alertas));
   checar('execução repetida não duplica o alerta', alertas.length === 1);
 } catch (e) {

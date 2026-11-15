@@ -27,7 +27,9 @@ export function Paleta({ aberta, onFechar }: { aberta: boolean; onFechar: () => 
     const o: Item[] = obras.filter((x) => !x.deleted).map((x) => ({ chave: `o:${x.id}`, rotulo: x.name ?? 'Obra', detalhe: `Obra · ${x.client ?? ''}`, href: '/gestao/activities/', icone: Building2, matiz: 28, alvo: norm(`${x.name} ${x.client} obra`) }));
     const p: Item[] = projetos.map((x) => ({ chave: `p:${x.id}`, rotulo: x.nome ?? 'Projeto', detalhe: `Projeto ${x.codigo ?? ''} · ${x.clienteNome ?? ''}`, href: '/dashboard/', icone: FolderKanban, matiz: 212, alvo: norm(`${x.nome} ${x.codigo} ${x.clienteNome} projeto`) }));
     const termos = norm(q).split(/\s+/).filter(Boolean);
-    return [...telas, ...o, ...p].filter((i) => termos.every((t) => i.alvo.includes(t))).slice(0, 9);
+    // Quem casa pelo nome vem antes de quem casa só pela descrição.
+    const peso = (i: Item) => (termos.length && termos.every((t) => norm(i.rotulo).includes(t)) ? 0 : 1);
+    return [...telas, ...o, ...p].filter((i) => termos.every((t) => i.alvo.includes(t))).sort((a, b) => peso(a) - peso(b)).slice(0, 9);
   }, [q, obras, projetos]);
 
   React.useEffect(() => { if (aberta) { setQ(''); setFoco(0); setTimeout(() => campo.current?.focus(), 0); } }, [aberta]);
