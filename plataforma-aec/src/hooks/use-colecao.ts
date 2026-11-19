@@ -5,7 +5,7 @@
  * para que Kanban, timesheet e redlines funcionem sem backend.
  */
 import * as React from 'react';
-import { collection, collectionGroup, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where, type DocumentData } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, doc, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch, type DocumentData } from 'firebase/firestore';
 import { db, MODO_DEMO } from '@/lib/firebase/client';
 import { DEMO_ART, DEMO_FILES, DEMO_NOTIFICATIONS, DEMO_OBRA, DEMO_PROJECTS, DEMO_TIMESHEETS } from '@/lib/demo-data';
 import { useAuth } from './use-auth';
@@ -126,4 +126,40 @@ export async function removerDoc(tenantId: string, caminho: string): Promise<voi
     return;
   }
   await concluir(deleteDoc(doc(db(), 'organizations', tenantId, ...caminho.split('/'))));
+}
+
+/** Várias atualizações de uma vez (tudo ou nada). `soma` incrementa campos numéricos. */
+export async function atualizarEmLote(tenantId: string, ops: { caminho: string; patch: DocumentData; soma?: Record<string, number> }[]): Promise<void> {
+  if (MODO_DEMO) {
+    for (const o of ops) {
+      const partes = o.caminho.split('/'), id = partes.pop()!, chave = chaveDemo(partes.join('/'));
+      memoria.set(chave, (memoria.get(chave) ?? []).map((i) => {
+        if (i.id !== id) return i;
+        const somado = Object.fromEntries(Object.entries(o.soma ?? {}).map(([k, v]) => [k, (Number(i[k]) || 0) + v]));
+        return { ...i, ...o.patch, ...somado };
+      }));
+    }
+    avisar();
+    return;
+  }
+  const lote = writeBatch(db());
+  for (const o of ops) lote.update(doc(db(), 'organizations', tenantId, ...o.caminho.split('/')), { ...o.patch, ...Object.fromEntries(Object.entries(o.soma ?? {}).map(([k, v]) => [k, increment(v)])) });
+  await concluir(lote.commit());
+}
+
+/** Cria/substitui vários documentos (em lotes de 400). Cada documento recebe `orgId`. */
+export async function gravarEmLote(tenantId: string, docs: { caminho: string; dados: DocumentData }[]): Promise<void> {
+  if (MODO_DEMO) {
+    for (const d of docs) {
+      const partes = d.caminho.split('/'), id = partes.pop()!, chave = chaveDemo(partes.join('/'));
+      memoria.set(chave, [...(memoria.get(chave) ?? []).filter((i) => i.id !== id), { id, ...d.dados }]);
+    }
+    avisar();
+    return;
+  }
+  for (let i = 0; i < docs.length; i += 400) {
+    const lote = writeBatch(db());
+    for (const d of docs.slice(i, i + 400)) lote.set(doc(db(), 'organizations', tenantId, ...d.caminho.split('/')), { ...d.dados, orgId: tenantId });
+    await concluir(lote.commit());
+  }
 }

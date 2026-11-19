@@ -49,7 +49,7 @@ export interface Kpi { rotulo: string; valor: string; detalhe?: string; alerta?:
 const brl = (v: number) => (Math.abs(v) >= 1e6 ? `R$ ${(v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi` : `R$ ${v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`);
 
 /** Quatro números que resumem cada área. */
-export function kpisDaArea(area: string, d: Dados, hoje: string): Kpi[] {
+export function kpisDaArea(area: string, d: Dados, hoje: string, vePessoal = true): Kpi[] {
   const obras = vivos(d.works), ativas = obras.filter((w) => w.status !== 'Concluída');
   switch (area) {
     case 'financeiro': {
@@ -76,7 +76,7 @@ export function kpisDaArea(area: string, d: Dados, hoje: string): Kpi[] {
     }
     case 'rh': {
       const p = vivos(d.staff), ativos = p.filter((x) => x.status === 'Ativo');
-      return [{ rotulo: 'Pessoas ativas', valor: String(ativos.length), detalhe: `${p.length} cadastradas` }, { rotulo: 'Folha mensal', valor: brl(ativos.reduce((s, x) => s + n(x.salary), 0)), detalhe: 'soma dos salários ativos' },
+      return [{ rotulo: 'Pessoas ativas', valor: String(ativos.length), detalhe: `${p.length} cadastradas` }, { rotulo: 'Folha mensal', valor: vePessoal ? brl(ativos.reduce((s, x) => s + n(x.salary), 0)) : '—', detalhe: vePessoal ? 'soma dos salários ativos' : 'visível ao Administrador e ao Financeiro' },
         { rotulo: 'Em férias', valor: String(p.filter((x) => x.status === 'Férias').length) }, { rotulo: 'Sem obra alocada', valor: String(ativos.filter((x) => !x.workId).length) }];
     }
     case 'qualidade': {

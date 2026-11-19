@@ -9,6 +9,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, MODO_DEMO } from '@/lib/firebase/client';
 import { DEMO_TENANT, DEMO_USER } from '@/lib/demo-data';
+import { funcaoDe, veTodasAsObras, type Funcao } from '@/lib/obratop/permissoes';
 import type { Member, Role, Tenant } from '@/lib/types';
 
 interface Sessao {
@@ -22,8 +23,10 @@ interface Sessao {
   semVinculo: boolean;
   /** E-mail confirmado (exigido para o Portal do Cliente). */
   emailVerificado: boolean;
-  /** Usuário de obra do ObraTop: só grava nos registros desta obra. `undefined` para o proprietário. */
+  /** Usuário de obra do ObraTop: só grava nos registros desta obra. `undefined` para quem vê todas as obras. */
   obraAtribuida: string | undefined;
+  /** Função no ObraTop (owner, manager, finance, project_user, viewer). */
+  funcao: Funcao;
   sair: () => Promise<void>;
   /** Relê a empresa do usuário (depois de criar a empresa ou aceitar um convite). */
   recarregar: () => void;
@@ -32,30 +35,36 @@ interface Sessao {
 }
 
 const PERFIS: Role[] = ['coordenador', 'orcamentista', 'projetista'];
-type Org = Record<string, unknown> & { name?: string; cnpj?: string; aec?: Partial<Tenant> };
+type Org = Record<string, unknown> & { name?: string; cnpj?: string; aec?: Partial<Tenant>; branding?: { logo?: string }; companyAddress?: string; companyPhone?: string; companyEmail?: string; defaultEngineer?: string };
 
 /** Dados da empresa: nome e CNPJ do ObraTop + os campos dos módulos novos (em `aec`). */
 export function empresaDe(id: string, org: Org): Tenant {
   const a = org.aec ?? {};
   return {
     id, nomeFantasia: org.name ?? 'Empresa', razaoSocial: a.razaoSocial || org.name || 'Empresa', cnpj: org.cnpj ?? '', uf: a.uf ?? 'BA',
-    branding: { corPrimaria: a.branding?.corPrimaria ?? '#3b4cca', corSecundaria: a.branding?.corSecundaria ?? '#111827', logoUrl: a.branding?.logoUrl },
+    // O logotipo é o mesmo do ObraTop 3 (org.branding.logo, imagem embutida); o campo antigo dos módulos novos fica como reserva.
+    branding: { corPrimaria: a.branding?.corPrimaria ?? '#3b4cca', corSecundaria: a.branding?.corSecundaria ?? '#111827', logoUrl: (typeof org.branding?.logo === 'string' && /^data:image\/(png|jpeg);base64,/.test(org.branding.logo) ? org.branding.logo : undefined) ?? a.branding?.logoUrl },
+    contato: { endereco: org.companyAddress ?? '', telefone: org.companyPhone ?? '', email: org.companyEmail ?? '', engenheiroPadrao: org.defaultEngineer ?? '' },
     responsavelTecnico: { nome: a.responsavelTecnico?.nome ?? '', conselho: a.responsavelTecnico?.conselho ?? 'CREA', registro: a.responsavelTecnico?.registro ?? '' },
     webhookUrl: a.webhookUrl, custoHoraTecnica: a.custoHoraTecnica ?? 100,
   };
 }
 export function papelDe(membro: Record<string, unknown>, perfil?: unknown): Role {
-  if (membro.role === 'owner') return 'socio_diretor';
-  return PERFIS.includes(perfil as Role) ? (perfil as Role) : 'projetista';
+  const f = funcaoDe(membro.role);
+  if (f === 'owner') return 'socio_diretor';
+  if (f === 'viewer') return 'consulta';
+  if (PERFIS.includes(perfil as Role)) return perfil as Role;
+  // Sem perfil próprio nos módulos novos: o Gestor atua como coordenador; o Financeiro, como orçamentista.
+  return f === 'manager' ? 'coordenador' : f === 'finance' ? 'orcamentista' : 'projetista';
 }
 
 const Ctx = React.createContext<Sessao | null>(null);
 type Estado = Omit<Sessao, 'sair' | 'recarregar' | 'reverificar'>;
-const VAZIO: Estado = { carregando: false, usuario: null, tenant: null, tenantId: null, role: undefined, semVinculo: false, emailVerificado: false, obraAtribuida: undefined };
+const VAZIO: Estado = { carregando: false, usuario: null, tenant: null, tenantId: null, role: undefined, semVinculo: false, emailVerificado: false, obraAtribuida: undefined, funcao: 'project_user' };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [estado, setEstado] = React.useState<Estado>(
-    MODO_DEMO ? { ...VAZIO, usuario: DEMO_USER, tenant: DEMO_TENANT, tenantId: 'demo', role: 'socio_diretor', emailVerificado: true } : { ...VAZIO, carregando: true },
+    MODO_DEMO ? { ...VAZIO, usuario: DEMO_USER, tenant: DEMO_TENANT, tenantId: 'demo', role: 'socio_diretor', emailVerificado: true, funcao: 'owner' } : { ...VAZIO, carregando: true },
   );
   const [versao, setVersao] = React.useState(0);
 
@@ -81,7 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setEstado({
           carregando: false, semVinculo: false, emailVerificado: u.emailVerified, tenantId: orgId!, tenant: empresaDe(orgId!, org), role,
           usuario: { ...base, nome: (membro.name as string) || base.nome, role },
-          obraAtribuida: membro.role === 'owner' ? undefined : ((membro.workId as string) || ''),
+          funcao: funcaoDe(membro.role),
+          obraAtribuida: veTodasAsObras(funcaoDe(membro.role)) ? undefined : ((membro.workId as string) || ''),
         });
       };
       const negado = () => setEstado({ ...VAZIO, usuario: base, semVinculo: true, emailVerificado: u.emailVerified });

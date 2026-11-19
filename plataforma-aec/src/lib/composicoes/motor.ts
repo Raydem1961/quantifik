@@ -325,7 +325,9 @@ export function criarResolvedor(base: BaseComposicoes, p: ParametrosPreco, sinap
         return { p: valor, origem: texto };
       }
     }
-    if (!x.c && cod && p.importados?.has(cod)) return { p: p.importados.get(cod)!, origem: 'tabela de insumos importada' };
+    // Tabela importada: o código casa com ou sem zeros à esquerda (00001379 = 1379).
+    const imp = !x.c && cod ? p.importados?.get(cod) ?? p.importados?.get(cod.replace(/^0+(?=\d)/, '')) : undefined;
+    if (imp !== undefined) return { p: imp, origem: 'tabela de insumos importada' };
     if (sin) {
       if (x.c) {
         const sub = base.porCodigo.get(cod);

@@ -7,8 +7,20 @@
         ? get(/databases/$(database)/documents/organizations/$(orgId)/perfis/$(request.auth.uid)).data.get('perfil', '')
         : '';
     }
-    function gestorAec(orgId) { return owner(orgId) || (member(orgId) && perfilDe(orgId) == 'coordenador'); }
-    function orcaAec(orgId) { return gestorAec(orgId) || (member(orgId) && perfilDe(orgId) == 'orcamentista'); }
+    // Sem perfil próprio, o Gestor do ObraTop atua como coordenador e o Financeiro como orçamentista; Consulta nunca grava.
+    function gestorAec(orgId) { return owner(orgId) || (member(orgId) && memberDoc(orgId).get('role', '') != 'viewer' && (perfilDe(orgId) == 'coordenador' || (perfilDe(orgId) == '' && memberDoc(orgId).get('role', '') == 'manager'))); }
+    function orcaAec(orgId) { return gestorAec(orgId) || (member(orgId) && memberDoc(orgId).get('role', '') != 'viewer' && (perfilDe(orgId) == 'orcamentista' || (perfilDe(orgId) == '' && memberDoc(orgId).get('role', '') == 'finance'))); }
+    // Convites com funções do ObraTop 3 (somados ao convite de engenheiro da obra). Gestor, Financeiro
+    // e Consulta enxergam todas as obras, então o convite não leva obra.
+    match /invites/{code} {
+      allow create: if signedIn() && owner(request.resource.data.orgId)
+        && request.resource.data.role in ['manager', 'finance', 'viewer']
+        && request.resource.data.email is string && request.resource.data.email.size() <= 254
+        && request.resource.data.workId is string
+        // Sem obra: nas regras do ObraTop, quem tem obra atribuída pode gravar nela — Consulta não pode.
+        && request.resource.data.workId == ''
+        && request.resource.data.expiresAt is timestamp && request.resource.data.expiresAt > request.time;
+    }
     function naoAltera(campos) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(campos); }
 
     // CUB oficial: leitura para qualquer usuário autenticado; escrita só pelo script de importação.
@@ -39,5 +51,14 @@
         && portalId == request.resource.data.orgId + '_' + request.resource.data.workId
         && request.resource.data.emails is list && request.resource.data.emails.size() <= 10
         && exists(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)/works/$(request.resource.data.workId));
+      allow delete: if owner(resource.data.orgId);
+    }
+    // Relatório fotográfico do portal: um documento por mês. O cliente lê se o painel-pai o lista.
+    match /portalCliente/{portalId}/fotos/{mes} {
+      allow read: if clienteDoPortal(get(/databases/$(database)/documents/portalCliente/$(portalId)).data)
+        || owner(get(/databases/$(database)/documents/portalCliente/$(portalId)).data.orgId);
+      allow create, update: if owner(request.resource.data.orgId)
+        && portalId == request.resource.data.orgId + '_' + request.resource.data.workId
+        && request.resource.data.mes == mes && request.resource.data.dias is list;
       allow delete: if owner(resource.data.orgId);
     }

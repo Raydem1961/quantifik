@@ -9,7 +9,7 @@ import { Badge, Field, Input } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
 import { useDados } from '@/hooks/use-dados';
 import { brlCompacto } from '@/lib/format';
-import { montarPortal, normalizarEmails, OPCOES_PADRAO, type OpcoesPortal, type Portal } from '@/lib/portal';
+import { montarFotos, montarPortal, normalizarEmails, OPCOES_PADRAO, type OpcoesPortal, type Portal } from '@/lib/portal';
 import { publicarPortal, removerPortal, usePortaisDaEmpresa } from '@/lib/portal-dados';
 
 type Msg = { tipo: 'ok' | 'erro'; texto: string } | undefined;
@@ -34,14 +34,14 @@ export default function Clientes() {
     const emails = normalizarEmails(textoEmails);
     if (emails.length === 0) { setMsg({ tipo: 'erro', texto: `Informe o e-mail do cliente de "${nome}".` }); return; }
     try {
-      await publicarPortal(montar(workId, emails, opcoes));
+      await publicarPortal(montar(workId, emails, opcoes), opcoes.fotos === false ? [] : montarFotos(tenantId!, workId, d), portais.find((x) => x.workId === workId));
       setRascunho((r) => { const n = { ...r }; delete n[workId]; return n; });
       setMsg({ tipo: 'ok', texto: `Portal de "${nome}" liberado para ${emails.join(', ')}. Envie ao cliente o endereço ${endereco} — ele cria a conta com esse e-mail, confirma o e-mail e já vê o painel.` });
     } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível publicar. Verifique a conexão e tente de novo.' }); }
   };
   const remover = async (workId: string, nome: string) => {
     if (!tenantId || !window.confirm(`Encerrar o acesso do cliente ao painel de "${nome}"?`)) return;
-    try { await removerPortal(tenantId, workId); setMsg({ tipo: 'ok', texto: `Acesso ao painel de "${nome}" encerrado.` }); } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível encerrar o acesso.' }); }
+    try { await removerPortal(tenantId, workId, portais.find((x) => x.workId === workId)?.fotosMeses?.map((m) => m.mes)); setMsg({ tipo: 'ok', texto: `Acesso ao painel de "${nome}" encerrado.` }); } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível encerrar o acesso.' }); }
   };
 
   return (
@@ -75,9 +75,10 @@ export default function Clientes() {
               </div>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={r.opcoes.diario} onChange={(e) => editar({ opcoes: { ...r.opcoes, diario: e.target.checked } })} />Mostrar o diário de obra (só registros assinados, sem ocorrências)</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={r.opcoes.fotos !== false} onChange={(e) => editar({ opcoes: { ...r.opcoes, fotos: e.target.checked } })} />Relatório fotográfico (fotos dos diários assinados, exceto as de uso interno)</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={r.opcoes.documentos} onChange={(e) => editar({ opcoes: { ...r.opcoes, documentos: e.target.checked } })} />Compartilhar os documentos aprovados desta obra</label>
               </div>
-              {aberta === id && tenantId && <div className="mt-4 rounded-2xl border bg-background p-4 md:p-6">{(() => { try { return <PainelCliente portal={montar(id, normalizarEmails(r.emails), r.opcoes)} />; } catch { return <p className="text-sm text-muted-foreground">Não foi possível montar o painel desta obra.</p>; } })()}</div>}
+              {aberta === id && tenantId && <div className="mt-4 rounded-2xl border bg-background p-4 md:p-6">{(() => { try { return <PainelCliente portal={montar(id, normalizarEmails(r.emails), r.opcoes)} fotosLocais={r.opcoes.fotos === false ? [] : montarFotos(tenantId, id, d)} />; } catch { return <p className="text-sm text-muted-foreground">Não foi possível montar o painel desta obra.</p>; } })()}</div>}
             </li>
           );
         })}

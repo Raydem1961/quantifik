@@ -329,7 +329,7 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     checar('usuário de obra: diário gravado na obra atribuída', rdo?.workId === 'w-seed' && rdo?.services === 'Concretagem da laje', JSON.stringify(rdo));
     checar('usuário de obra: sem botão de excluir', (await p.getByRole('button', { name: /^Excluir/ }).count()) === 0);
     await p.goto(`${APP}/admin/`, { waitUntil: 'load' });
-    checar('usuário de obra: administração é só do proprietário', await p.getByText('Somente o proprietário da empresa acessa esta tela.').waitFor({ timeout: 15000 }).then(() => true, () => false));
+    checar('usuário de obra: administração é só do proprietário', await p.getByText('Somente o administrador geral da empresa acessa esta tela.').waitFor({ timeout: 15000 }).then(() => true, () => false));
 
     console.log('\n12. Administração: empresa, perfis, convites e primeiro acesso');
     p = await novaPagina();
@@ -344,7 +344,7 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     checar('dados da empresa salvos sem perder os campos do ObraTop', org?.name === 'Atelier Teste' && org?.ownerUid === uids.socio && org?.aec?.responsavelTecnico?.nome === 'Eng. Teste', JSON.stringify(org));
     await p.getByRole('combobox', { name: 'Perfil de projetista' }).selectOption('orcamentista');
     checar('proprietário define o perfil da pessoa', await ate(async () => (await adb.doc(`organizations/${T}/perfis/${uids.projetista}`).get()).data()?.perfil === 'orcamentista'));
-    await p.getByLabel('E-mail').fill('convidado@atelier.test');
+    await p.getByLabel('E-mail', { exact: true }).fill('convidado@atelier.test');
     await p.getByRole('combobox', { name: /^Obra/ }).first().selectOption({ label: 'Obra Semente' });
     await p.getByRole('button', { name: 'Gerar convite' }).click();
     const link = await p.locator('code').filter({ hasText: 'convite=' }).innerText({ timeout: 15000 });

@@ -6,7 +6,7 @@
  * navegador de cada pessoa.
  */
 import * as React from 'react';
-import { Copy, Download, FileDown, FileUp, Plus, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { ClipboardPaste, Copy, Download, FileDown, FileUp, Plus, RotateCcw, Send, Share2, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import {
   type BaseComposicoes, type Composicao, type Cotacao, type LinhaCusto, type Medidas, type ParametrosPreco, type TipoInsumo,
 } from '@/lib/composicoes/motor';
 import { PISOS } from '@/lib/composicoes/tabelas';
+import { linhasDeTexto, linhasDeXlsx, tabelaDePrecos } from '@/lib/composicoes/importar-precos';
 import { cotacaoParaOrcamento } from '@/lib/obratop/integracao';
 import { CATALOGO_PADRAO } from '@/lib/orcamento/bases';
 import { brl, num } from '@/lib/format';
@@ -28,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 type IdBase = 'sinapi' | 'orse';
 type DocCotacao = Cotacao & { id: string };
-type DocConfig = { id: string; horas?: number; encargos?: number | null; bdi?: number; regime?: 'sd' | 'cd'; pisos?: Record<string, number>; manuais?: Record<string, number> };
+type DocConfig = { id: string; horas?: number; encargos?: number | null; bdi?: number; regime?: 'sd' | 'cd'; pisos?: Record<string, number>; manuais?: Record<string, number>; itens?: Record<string, number>; nome?: string; em?: string };
 
 const GRUPOS: [TipoInsumo, string, string][] = [
   ['mo', 'Mão de obra', 'var(--series-1)'], ['mat', 'Materiais', 'var(--series-3)'], ['eqp', 'Equipamentos', 'var(--series-2)'],
@@ -70,6 +71,12 @@ export default function Composicoes() {
       regime: salvo.regime === 'cd' ? 'cd' : 'sd', pisos: { ...padrao.pisos, ...(salvo.pisos ?? {}) }, manuais: salvo.manuais ?? {},
     });
   }, [salvo]);
+  // Tabela de preços própria (Quantifik): guardada para todo o escritório em config/precosImportados.
+  const importada = configs.find((c) => c.id === 'precosImportados');
+  React.useEffect(() => {
+    setParams((p) => ({ ...p, importados: importada?.itens ? new Map(Object.entries(importada.itens)) : undefined }));
+  }, [importada?.em]); // eslint-disable-line react-hooks/exhaustive-deps -- muda quando outra pessoa importa
+  const [colar, setColar] = React.useState<string | null>(null);
   const [erroSalvar, setErroSalvar] = React.useState<string>();
   const alterarParams = (patch: Partial<ParametrosPreco>) => {
     const novo = { ...params, ...patch };
@@ -152,7 +159,7 @@ export default function Composicoes() {
     } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível enviar ao orçamento da obra. Verifique sua permissão e a conexão.' }); }
   };
 
-  const gerarPdf = async () => {
+  const gerarPdf = async (compartilhar = false) => {
     if (!cotacao || !calculo || !tenant) return;
     try {
       const [{ pdf }, { CotacaoPdf }] = await Promise.all([import('@react-pdf/renderer'), import('@/components/contracts/cotacao-pdf')]);
@@ -161,9 +168,16 @@ export default function Composicoes() {
         empresa: { nome: tenant.nomeFantasia, razaoSocial: tenant.razaoSocial, cnpj: tenant.cnpj, responsavel: tenant.responsavelTecnico.nome, registro: tenant.responsavelTecnico.registro, logoUrl: tenant.branding.logoUrl, corPrimaria: tenant.branding.corPrimaria },
         cotacao, calculo, referencia,
       }} />).toBlob();
+      const nomeArq = `cotacao-${cotacao.numero.replace('/', '-')}.pdf`;
+      // Compartilhar (WhatsApp, e-mail…) onde o aparelho permite; senão, baixa o arquivo.
+      const arquivo = new File([blob], nomeArq, { type: 'application/pdf' });
+      if (compartilhar && navigator.canShare?.({ files: [arquivo] })) {
+        try { await navigator.share({ files: [arquivo], title: `Cotação ${cotacao.numero}`, text: `Cotação ${cotacao.numero}${cotacao.cliente ? ` — ${cotacao.cliente}` : ''}` }); } catch { /* cancelado pelo usuário */ }
+        return;
+      }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `cotacao-${cotacao.numero.replace('/', '-')}.pdf`;
+      a.download = nomeArq;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 30000);
     } catch (e) { setMsg({ tipo: 'erro', texto: `Não foi possível gerar o PDF: ${e instanceof Error ? e.message : 'erro desconhecido'}` }); }
@@ -198,21 +212,34 @@ export default function Composicoes() {
       setMsg({ tipo: 'ok', texto: `${n} cotação(ões) importada(s).` });
     } catch (e) { setMsg({ tipo: 'erro', texto: `Importação cancelada: ${e instanceof Error ? e.message : 'arquivo inválido'}.` }); }
   };
+  const aplicarTabela = async (linhas: string[][], nome: string) => {
+    const { precos, ignoradas } = tabelaDePrecos(linhas);
+    if (precos.size === 0) { setMsg({ tipo: 'erro', texto: 'Nenhum preço reconhecido. A tabela precisa de uma coluna de código (só números) e uma de preço — com cabeçalho "Código" e "Preço" ou nessa ordem.' }); return; }
+    setParams((p) => ({ ...p, importados: precos }));
+    const texto = `${precos.size.toLocaleString('pt-BR')} preços de "${nome}" aplicados${ignoradas ? ` (${ignoradas} linha(s) ignorada(s))` : ''}`;
+    if (tenantId && podeEditar) {
+      try { await definirDoc(tenantId, 'config/precosImportados', { itens: Object.fromEntries(precos), nome, em: new Date().toISOString() }); setMsg({ tipo: 'ok', texto: `${texto} e guardados para toda a equipe.` }); }
+      catch { setMsg({ tipo: 'erro', texto: `${texto} só nesta sessão: não foi possível guardar (tabela grande demais ou sem permissão).` }); }
+    } else setMsg({ tipo: 'ok', texto: `${texto} nesta sessão.` });
+  };
   const importarPrecos = async (arquivo: File) => {
-    const m = new Map<string, number>();
-    for (const linha of (await arquivo.text()).split(/\r?\n/)) {
-      const [cod, preco] = linha.split(/[;\t]|,(?=\s*\d+[.,]?\d*\s*$)/);
-      const v = lerNumero(preco);
-      if (cod && /^\d+$/.test(cod.trim()) && v > 0) m.set(cod.trim(), v);
-    }
-    if (m.size === 0) { setMsg({ tipo: 'erro', texto: 'Nenhuma linha "código;preço" válida no arquivo.' }); return; }
-    setParams((p) => ({ ...p, importados: m }));
-    setMsg({ tipo: 'ok', texto: `${m.size} preços de insumos carregados para esta sessão.` });
+    try {
+      const linhas = /\.xlsx$/i.test(arquivo.name) ? linhasDeXlsx(new Uint8Array(await arquivo.arrayBuffer())) : linhasDeTexto(await arquivo.text());
+      await aplicarTabela(linhas, arquivo.name);
+    } catch (e) { setMsg({ tipo: 'erro', texto: e instanceof Error ? e.message : 'Não foi possível ler o arquivo.' }); }
+  };
+  const removerTabela = async () => {
+    if (!window.confirm('Remover a tabela de preços importada? Os insumos voltam aos preços das bases.')) return;
+    setParams((p) => ({ ...p, importados: undefined }));
+    if (tenantId && podeEditar) await removerDoc(tenantId, 'config/precosImportados').catch(() => undefined);
+    setMsg({ tipo: 'ok', texto: 'Tabela importada removida.' });
   };
 
   const enc = encargosEfetivos(bases.sinapi, params);
   const f = 1 + (params.bdi || 0) / 100;
   const nManuais = Object.keys(params.manuais).length;
+  const [podeCompartilhar, setPodeCompartilhar] = React.useState(false);
+  React.useEffect(() => { setPodeCompartilhar(typeof navigator !== 'undefined' && !!navigator.canShare?.({ files: [new File([''], 'x.pdf', { type: 'application/pdf' })] })); }, []);
 
   return (
     <>
@@ -322,6 +349,7 @@ export default function Composicoes() {
             {podeEditar && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-4 w-4" />Importar
               <input type="file" accept=".json,application/json" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importar(a); }} /></label>}
             <Button disabled={!cotacao || !calculo || !cotacao.itens.length} onClick={() => void gerarPdf()}><Download className="h-4 w-4" />Baixar PDF</Button>
+            {podeCompartilhar && <Button variant="outline" disabled={!cotacao || !calculo || !cotacao.itens.length} onClick={() => void gerarPdf(true)}><Share2 className="h-4 w-4" />Compartilhar PDF</Button>}
             {podeEditar && cotacao && cotacao.itens.length > 0 && obras.length > 0 && (
               <div className="flex w-full flex-wrap items-end gap-2 border-t pt-3">
                 <Field label="Levar esta cotação para o orçamento de uma obra" className="min-w-[240px] flex-1">
@@ -389,9 +417,18 @@ export default function Composicoes() {
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 {podeEditar && params.encargos !== null && <Button size="sm" variant="outline" onClick={() => alterarParams({ encargos: null })}><RotateCcw className="h-3.5 w-3.5" />Usar encargos horistas do SINAPI-BA</Button>}
                 {podeEditar && nManuais > 0 && <Button size="sm" variant="outline" onClick={() => { if (window.confirm(`Apagar os ${nManuais} preços digitados? Os serviços voltam aos preços das bases.`)) alterarParams({ manuais: {} }); }}>Limpar {nManuais} preços digitados</Button>}
-                <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-xs font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-3.5 w-3.5" />Importar tabela de insumos (código;preço)
-                  <input type="file" accept=".csv,.txt" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importarPrecos(a); }} /></label>
+                <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-xs font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-3.5 w-3.5" />Importar tabela de preços (Excel, CSV)
+                  <input type="file" accept=".xlsx,.csv,.txt" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importarPrecos(a); }} /></label>
+                <Button size="sm" variant="outline" onClick={() => setColar(colar === null ? '' : null)}><ClipboardPaste className="h-3.5 w-3.5" />Colar tabela</Button>
+                {params.importados && <Button size="sm" variant="outline" onClick={() => void removerTabela()}>Remover tabela importada ({params.importados.size.toLocaleString('pt-BR')})</Button>}
               </div>
+              {colar !== null && (
+                <div className="flex flex-col gap-2 sm:col-span-2">
+                  <Textarea aria-label="Tabela colada" className="min-h-[120px] font-mono text-xs" placeholder={'Cole aqui as colunas copiadas do Excel ou do PDF do fornecedor, por exemplo:\nCódigo\tInsumo\tPreço\n1379\tCimento CP II-32\t38,90'} value={colar} onChange={(e) => setColar(e.target.value)} />
+                  <div className="flex gap-2"><Button size="sm" disabled={!colar.trim()} onClick={() => { void aplicarTabela(linhasDeTexto(colar), 'texto colado'); setColar(null); }}>Usar texto colado</Button><Button size="sm" variant="ghost" onClick={() => setColar(null)}>Cancelar</Button></div>
+                </div>
+              )}
+              {importada?.nome && <p className="text-xs text-muted-foreground sm:col-span-2">Tabela importada: <b className="text-foreground">{importada.nome}</b>{importada.em ? ` em ${new Date(importada.em).toLocaleDateString('pt-BR')}` : ''} — os preços dela substituem os das bases para os mesmos códigos.</p>}
               <p className="text-xs text-muted-foreground sm:col-span-2">Valor-hora = piso ÷ horas por mês × (1 + encargos). Na base SINAPI somam-se os encargos complementares da função (EPI, ferramentas, exames, transporte, alimentação).</p>
             </CardContent>
           </Card>

@@ -3,8 +3,10 @@
  * Empresa, membros e convites — exatamente os documentos que o ObraTop usa, para que os dois
  * aplicativos compartilhem o mesmo cadastro (regras em regras/obratop-base.firestore.rules).
  */
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { formatCnpj, processLogoFile, validEmail } from '@/lib/obratop/vendor/branding.mjs';
 import { auth, db } from '@/lib/firebase/client';
+import type { Funcao } from '@/lib/obratop/permissoes';
 
 export const PERFIL_LABEL: Record<string, string> = { '': 'Usuário de obra', coordenador: 'Coordenador', orcamentista: 'Orçamentista', projetista: 'Projetista' };
 
@@ -35,7 +37,7 @@ export async function aceitarConvite(codigo: string): Promise<string> {
   if (!convite) throw new Error('Convite não encontrado.');
   const lote = writeBatch(db()), agora = serverTimestamp();
   lote.set(doc(db(), 'organizations', convite.orgId, 'members', u.uid), {
-    email: u.email, name: u.displayName || u.email, role: 'project_user', status: 'active', workId: convite.workId, inviteCode: cod,
+    email: u.email, name: u.displayName || u.email, role: ['manager', 'finance', 'viewer'].includes(convite.role) ? convite.role : 'project_user', status: 'active', workId: convite.workId, inviteCode: cod,
     createdAt: agora,
   });
   lote.set(doc(db(), 'users', u.uid), { email: u.email, currentOrg: convite.orgId, updatedAt: agora }, { merge: true });
@@ -44,22 +46,28 @@ export async function aceitarConvite(codigo: string): Promise<string> {
   return convite.orgId as string;
 }
 
-/** Gera um convite (válido por 7 dias) para um e-mail, vinculado a uma obra, como exige o ObraTop. */
-export async function criarConvite(orgId: string, email: string, workId: string): Promise<string> {
+/**
+ * Gera um convite (válido por 7 dias). Engenheiro da obra precisa de uma obra; Gestor, Financeiro
+ * e Consulta enxergam todas as obras e não levam obra no convite.
+ */
+export async function criarConvite(orgId: string, email: string, workId: string, funcao: Funcao = 'project_user'): Promise<string> {
   const u = auth().currentUser;
   const e = email.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(e) || e.length > 254) throw new Error('E-mail inválido.');
-  if (!workId) throw new Error('Escolha a obra a que a pessoa terá acesso.');
+  if (funcao === 'owner') throw new Error('Função inválida.');
+  const obra = funcao === 'project_user' ? workId : '';
+  if (funcao === 'project_user' && !obra) throw new Error('Escolha a obra a que a pessoa terá acesso.');
   const codigo = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
   await setDoc(doc(db(), 'invites', codigo), {
-    orgId, email: e, role: 'project_user', workId, expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 86400000)),
+    orgId, email: e, role: funcao, workId: obra, expiresAt: Timestamp.fromDate(new Date(Date.now() + 7 * 86400000)),
     createdBy: u?.uid ?? '', createdAt: serverTimestamp(),
   });
   return codigo;
 }
 
-/** Muda a obra de um membro; e-mail, papel e código de convite ficam como estão (exigência das regras). */
-export const atualizarMembro = (orgId: string, uid: string, workId: string) => updateDoc(doc(db(), 'organizations', orgId, 'members', uid), { workId });
+/** Muda função, obra e bloqueio de um membro (e-mail e código de convite ficam como estão, exigência das regras). */
+export const atualizarMembro = (orgId: string, uid: string, dados: { role: Funcao; workId: string; status?: 'active' | 'blocked' }) =>
+  updateDoc(doc(db(), 'organizations', orgId, 'members', uid), { role: dados.role, workId: dados.role === 'project_user' ? dados.workId : '', ...(dados.status ? { status: dados.status } : {}) });
 /** Perfil nos módulos novos (documento separado, que só o proprietário grava). */
 export const definirPerfil = (orgId: string, uid: string, perfil: string) => setDoc(doc(db(), 'organizations', orgId, 'perfis', uid), { perfil });
 export async function removerMembro(orgId: string, uid: string): Promise<void> {
@@ -67,7 +75,17 @@ export async function removerMembro(orgId: string, uid: string): Promise<void> {
   await deleteDoc(doc(db(), 'organizations', orgId, 'perfis', uid)).catch(() => { /* pode não existir */ });
 }
 
-/** Dados dos módulos novos na empresa: razão social, UF, responsável técnico, cores e custo-hora. */
-export async function salvarEmpresa(orgId: string, dados: { name: string; cnpj: string; aec: Record<string, unknown> }): Promise<void> {
-  await updateDoc(doc(db(), 'organizations', orgId), { name: dados.name.trim(), cnpj: dados.cnpj.trim(), aec: dados.aec, updatedAt: serverTimestamp() });
+/** Dados da empresa: campos do ObraTop 3 (nome, CNPJ, contatos) e dos módulos novos (em `aec`). */
+export async function salvarEmpresa(orgId: string, dados: { name: string; cnpj: string; contato: { endereco: string; telefone: string; email: string; engenheiroPadrao: string }; aec: Record<string, unknown> }): Promise<void> {
+  if (!validEmail(dados.contato.email)) throw new Error('Informe um e-mail válido (ex.: contato@empresa.com.br).');
+  await updateDoc(doc(db(), 'organizations', orgId), {
+    name: dados.name.trim(), cnpj: formatCnpj(dados.cnpj), companyAddress: dados.contato.endereco.trim().slice(0, 200), companyPhone: dados.contato.telefone.trim().slice(0, 40),
+    companyEmail: dados.contato.email.trim().slice(0, 120), defaultEngineer: dados.contato.engenheiroPadrao.trim().slice(0, 120), aec: dados.aec, updatedAt: serverTimestamp(),
+  });
+}
+/** Logotipo no mesmo formato do ObraTop 3 (aparece nos dois aplicativos e nos PDFs). */
+export async function salvarLogo(orgId: string, arquivo: File | null): Promise<void> {
+  if (!arquivo) { await updateDoc(doc(db(), 'organizations', orgId), { branding: deleteField(), updatedAt: serverTimestamp() }); return; }
+  const l = await processLogoFile(arquivo);
+  await updateDoc(doc(db(), 'organizations', orgId), { branding: { logo: l.dataUrl, w: l.w, h: l.h, name: l.name, updatedAt: new Date().toISOString() }, updatedAt: serverTimestamp() });
 }

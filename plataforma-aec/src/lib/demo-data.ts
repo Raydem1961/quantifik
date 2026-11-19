@@ -13,6 +13,7 @@ export const DEMO_TENANT: Tenant = {
   branding: { corPrimaria: '#3b4cca', corSecundaria: '#111827' },
   responsavelTecnico: { nome: 'Eng. Responsável Demo', conselho: 'CREA', registro: 'CREA-BA 000000' },
   custoHoraTecnica: 95,
+  contato: { endereco: 'Av. Tancredo Neves, 1000 — Salvador/BA', telefone: '(71) 3000-0000', email: 'contato@atelierdemo.com.br', engenheiroPadrao: 'Eng. Responsável Demo' },
 };
 
 export const DEMO_USER: Member = { uid: 'demo-user', nome: 'Você (demo)', email: 'demo@exemplo.com', role: 'socio_diretor', ativo: true };

@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useDados } from '@/hooks/use-dados';
-import { mesmoConteudo, montarPortal, type Portal } from '@/lib/portal';
+import { mesmoConteudo, montarFotos, montarPortal, type Portal } from '@/lib/portal';
 import { publicarPortal, usePortaisDaEmpresa } from '@/lib/portal-dados';
 import { MODO_DEMO } from '@/lib/firebase/client';
 
@@ -21,7 +21,7 @@ function Recalcular({ portais }: { portais: Portal[] }) {
       for (const atual of portais) {
         try {
           const novo = montarPortal(tenantId, atual.workId, d, { nome: tenant.nomeFantasia, responsavel: tenant.responsavelTecnico.nome, registro: tenant.responsavelTecnico.registro }, atual.emails, atual.opcoes, hoje);
-          if (!mesmoConteudo(novo, atual)) void publicarPortal(novo).catch(() => { /* tenta de novo na próxima mudança */ });
+          if (!mesmoConteudo(novo, atual)) void publicarPortal(novo, atual.opcoes.fotos === false ? [] : montarFotos(tenantId, atual.workId, d), atual).catch(() => { /* tenta de novo na próxima mudança */ });
         } catch { /* obra excluída: o painel fica como está até o proprietário remover */ }
       }
     }, 4000);

@@ -93,6 +93,7 @@ export default function Login() {
             <button type="button" disabled={MODO_DEMO} onClick={() => { setModo(modo === 'entrar' ? 'criar' : 'entrar'); setErro(undefined); setInfo(undefined); }} className="font-medium text-primary underline-offset-2 hover:underline disabled:opacity-50">{modo === 'entrar' ? 'Criar conta' : 'Já tenho conta'}</button>
             {modo === 'entrar' && <button type="button" disabled={MODO_DEMO} onClick={() => void redefinir()} className="text-primary underline-offset-2 hover:underline disabled:opacity-50">Esqueci minha senha</button>}
           </div>
+          <p className="mt-8 text-[11px] leading-relaxed text-muted-foreground">Ao entrar ou criar a conta, você concorda com os <a href="/legal/#termos" className="underline underline-offset-2 hover:text-foreground">termos de uso</a> e a <a href="/legal/#privacidade" className="underline underline-offset-2 hover:text-foreground">política de privacidade</a>.</p>
         </div>
       </section>
     </main>

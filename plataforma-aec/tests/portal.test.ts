@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { idPortal, mesmoConteudo, montarPortal, normalizarEmails, OPCOES_PADRAO, type DadosObra } from '../src/lib/portal';
+import { idPortal, indiceDeFotos, mesmoConteudo, montarFotos, montarPortal, normalizarEmails, OPCOES_PADRAO, type DadosObra } from '../src/lib/portal';
 
 const emp = { nome: 'Construtora X', responsavel: 'Eng. Y', registro: 'CREA 1' };
 const D: DadosObra = {
@@ -28,14 +28,20 @@ const D: DadosObra = {
     { id: 'fx', workId: 'w2', type: 'Receita', description: 'OUTRO CLIENTE', dueDate: '2026-03-10', value: 1, status: 'Recebido' },
   ],
   documents: [{ id: 'd1', workId: 'w1', name: 'Alvará', category: 'Licenças', status: 'Aprovado', fileUrl: 'https://x/alvara.pdf' }, { id: 'd2', workId: 'w1', name: 'Rascunho interno', status: 'Rascunho', fileUrl: 'https://x/r.pdf' }, { id: 'd3', workId: 'w1', name: 'Sem link', status: 'Aprovado' }],
-  dailyLogs: [{ id: 'r1', workId: 'w1', date: '2026-04-09', weather: 'Bom', services: 'Concretagem', occurrences: 'DISCUSSÃO INTERNA', status: 'Assinado' }, { id: 'r2', workId: 'w1', date: '2026-04-10', weather: 'Bom', services: 'Rascunho', status: 'Rascunho' }],
+  dailyLogs: [
+    { id: 'r1', workId: 'w1', date: '2026-04-09', weather: 'Bom', services: 'Concretagem', occurrences: 'DISCUSSÃO INTERNA', status: 'Assinado',
+      photos: [{ id: 'f1', url: 'https://s/f1.jpg', thumb: 'https://s/f1_t.jpg', legenda: 'Laje', activityId: 'a2' }, { id: 'f2', url: 'https://s/f2.jpg', thumb: 'https://s/f2_t.jpg', legenda: 'FOTO INTERNA', privada: true }] },
+    { id: 'r2', workId: 'w1', date: '2026-04-10', weather: 'Bom', services: 'Rascunho', status: 'Rascunho', photos: [{ id: 'f3', url: 'https://s/RASCUNHO.jpg', legenda: 'não assinado' }] },
+    { id: 'r3', workId: 'w1', date: '2026-03-20', weather: 'Chuva', services: 'Fundações', status: 'Assinado', photos: [{ id: 'f4', url: 'https://s/f4.jpg', legenda: 'Sapata' }, { id: 'f5', url: 'javascript:alert(1)', legenda: 'ATAQUE' }] },
+    { id: 'rx', workId: 'w2', date: '2026-04-09', status: 'Assinado', photos: [{ id: 'fx', url: 'https://s/OUTRA_OBRA.jpg' }] },
+  ],
 };
 const p = montarPortal('org', 'w1', D, emp, ['cliente@a.com'], { diario: true, documentos: true }, '2026-04-10', 'T');
 
 describe('portal do cliente', () => {
   it('nada de outra obra nem de custo interno entra no painel', () => {
     const texto = JSON.stringify(p);
-    for (const proibido of ['SEGREDO DE OUTRA OBRA', 'OUTRO CLIENTE', 'OUTRA', 'CUSTO INTERNO', 'DISCUSSÃO INTERNA', 'Rascunho interno', 'Excluída', '400000', 'Outra obra']) expect(texto).not.toContain(proibido);
+    for (const proibido of ['FOTO INTERNA', 'RASCUNHO.jpg', 'OUTRA_OBRA', 'ATAQUE', 'SEGREDO DE OUTRA OBRA', 'OUTRO CLIENTE', 'OUTRA', 'CUSTO INTERNO', 'DISCUSSÃO INTERNA', 'Rascunho interno', 'Excluída', '400000', 'Outra obra']) expect(texto).not.toContain(proibido);
     expect(p.obra.nome).toBe('Residencial A');
   });
   it('contrato: valor com aditivo, medido e saldo', () => {
@@ -72,7 +78,7 @@ describe('portal do cliente', () => {
     expect(p.curva[3]!.fisicoRealizado).toBe(p.indicadores.fisicoRealizado);
   });
   it('diário só assinado; documentos só aprovados com link — e só se a empresa liberar', () => {
-    expect(p.diario).toEqual([{ data: '2026-04-09', clima: 'Bom', servicos: 'Concretagem' }]);
+    expect(p.diario).toEqual([{ data: '2026-04-09', clima: 'Bom', servicos: 'Concretagem' }, { data: '2026-03-20', clima: 'Chuva', servicos: 'Fundações' }]);
     expect(p.documentos.map((d) => d.nome)).toEqual(['Alvará']);
     const fechado = montarPortal('org', 'w1', D, emp, [], OPCOES_PADRAO, '2026-04-10', 'T');
     expect(fechado.documentos).toEqual([]);
@@ -85,6 +91,19 @@ describe('portal do cliente', () => {
     expect(v.curva).toHaveLength(12);
     expect(v.curva[11]!.fisicoPrevisto).toBe(100);
     expect(() => montarPortal('org', 'nao-existe', D, emp, [], OPCOES_PADRAO, '2026-07-01')).toThrow(/Obra/);
+  });
+  it('relatório fotográfico: só diários assinados, sem fotos internas, links seguros, por mês', () => {
+    const m = montarFotos('org', 'w1', D);
+    expect(m.map((x) => [x.mes, x.rotulo])).toEqual([['2026-04', 'abril de 2026'], ['2026-03', 'março de 2026']]);
+    expect(m[0]!.dias).toEqual([{ data: '2026-04-09', clima: 'Bom', servicos: 'Concretagem', fotos: [{ url: 'https://s/f1.jpg', thumb: 'https://s/f1_t.jpg', legenda: 'Laje', servico: '2 Estrutura' }] }]);
+    expect(m[1]!.dias[0]!.fotos.map((f) => f.legenda)).toEqual(['Sapata']);
+    expect(m[1]!.dias[0]!.fotos[0]!.thumb).toBe('https://s/f4.jpg');
+    expect(p.fotosMeses.map((x) => [x.mes, x.dias, x.fotos])).toEqual([['2026-04', 1, 1], ['2026-03', 1, 1]]);
+    // muda a legenda → muda o resumo só daquele mês
+    const D2 = { ...D, dailyLogs: D.dailyLogs.map((l) => (l.id === 'r1' ? { ...l, photos: [{ id: 'f1', url: 'https://s/f1.jpg', legenda: 'Laje concretada' }] } : l)) };
+    const [a, b] = [indiceDeFotos(montarFotos('org', 'w1', D)), indiceDeFotos(montarFotos('org', 'w1', D2))];
+    expect(a[0]!.hash).not.toBe(b[0]!.hash); expect(a[1]!.hash).toBe(b[1]!.hash);
+    expect(montarPortal('org', 'w1', D, emp, [], { diario: true, documentos: false, fotos: false }, '2026-04-10').fotosMeses).toEqual([]);
   });
   it('utilitários', () => {
     expect(idPortal('o', 'w')).toBe('o_w');

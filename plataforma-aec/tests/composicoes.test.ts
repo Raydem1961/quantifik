@@ -217,3 +217,30 @@ describe.skipIf(!temOriginal)('paridade com o Quantifik publicado', () => {
     expect(ok / n).toBeGreaterThan(0.9);
   });
 });
+
+import { zipSync, strToU8 } from 'fflate';
+import { linhasDeTexto, linhasDeXlsx, numeroBr, tabelaDePrecos } from '../src/lib/composicoes/importar-precos';
+describe('tabela de preços própria (Quantifik)', () => {
+  it('números brasileiros e internacionais', () => {
+    expect([numeroBr('1.234,56'), numeroBr('1234.56'), numeroBr('R$ 12,3'), numeroBr('1,234.50'), numeroBr('')].map((x) => (Number.isNaN(x) ? 'NaN' : x))).toEqual([1234.56, 1234.56, 12.3, 1234.5, 'NaN']);
+  });
+  it('CSV com cabeçalho em qualquer ordem e texto colado do Excel (tabulação)', () => {
+    const a = tabelaDePrecos(linhasDeTexto('Descrição;Unidade;Código;Preço unitário\nCimento CP II;sc;00001379;38,90\nAreia;m3;370;120,00\nlinha ruim;;;'));
+    expect([...a.precos]).toEqual([['1379', 38.9], ['370', 120]]); expect(a.ignoradas).toBe(1);
+    const b = tabelaDePrecos(linhasDeTexto('1379\tCIMENTO\tSC\t38,90\n370\tAREIA\tM3\t120'));
+    expect([...b.precos]).toEqual([['1379', 38.9], ['370', 120]]);
+  });
+  it('planilha .xlsx (strings compartilhadas, células vazias e números)', () => {
+    const xlsx = zipSync({
+      'xl/workbook.xml': strToU8('<workbook><sheets><sheet name="Preços" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+      'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+      'xl/sharedStrings.xml': strToU8('<sst><si><t>Código</t></si><si><t>Insumo</t></si><si><t>Preço</t></si><si><t>Aço CA-50 &amp; corte</t></si></sst>'),
+      'xl/worksheets/sheet1.xml': strToU8('<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row><row r="2"><c r="A2"><v>34</v></c><c r="B2" t="s"><v>3</v></c><c r="C2"><v>7.42</v></c></row><row r="3"><c r="A3"><v>370</v></c><c r="C3"><v>120</v></c></row></sheetData></worksheet>'),
+    });
+    const l = linhasDeXlsx(xlsx);
+    expect(l[1]).toEqual(['34', 'Aço CA-50 & corte', '7.42']);
+    expect(l[2]).toEqual(['370', '', '120']);
+    expect([...tabelaDePrecos(l).precos]).toEqual([['34', 7.42], ['370', 120]]);
+    expect(() => linhasDeXlsx(new Uint8Array([1, 2, 3]))).toThrow(/Excel/);
+  });
+});

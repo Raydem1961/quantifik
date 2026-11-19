@@ -1,3 +1,47 @@
+      // ── Funções do ObraTop 3.26+: Gestor e Financeiro (todas as obras) e Consulta (só leitura) ──
+      // Regras somadas às do ObraTop: concedem o que cada função faz, com as mesmas validações.
+      function funcaoObra() { return memberDoc(orgId).get('role', ''); }
+      // Membro que pode gravar algo (Consulta é somente leitura).
+      function escreve() { return member(orgId) && funcaoObra() != 'viewer'; }
+      function gestorObra() { return member(orgId) && funcaoObra() == 'manager'; }
+      function financeiroObra() { return member(orgId) && funcaoObra() == 'finance'; }
+      function valoresValidos(d) {
+        return validPercent(d, 'progress') && validPercent(d, 'physical') && validPercent(d, 'bdi') && validPercent(d, 'progressTo')
+          && validNonNegative(d, 'value') && validNonNegative(d, 'qty') && validNonNegative(d, 'unitValue') && validNonNegative(d, 'salary')
+          && validNonNegative(d, 'currentStock') && validNonNegative(d, 'minStock') && validNonNegative(d, 'maxStock') && validNonNegative(d, 'monthlyCost')
+          && validNonNegative(d, 'hourmeter') && validNonNegative(d, 'durationDays') && validNonNegative(d, 'plannedQty') && validNonNegative(d, 'actualQty')
+          && validText(d, 'name', 180) && validText(d, 'cnpj', 32);
+      }
+      function obraValida(d) { return d.get('workId', '') == '' || validWorkRef(orgId, d.get('workId', '')); }
+      function moduloDaFuncao(col) {
+        return (gestorObra() && col in ['works', 'activities', 'budgets', 'measurements', 'finance', 'contracts', 'orders', 'inventory', 'suppliers', 'staff', 'equipment', 'quality', 'safety', 'documents', 'dailyLogs', 'progressSnapshots'])
+          || (financeiroObra() && col in ['finance', 'measurements', 'contracts', 'orders', 'budgets']);
+      }
+      match /{col}/{id} {
+        allow create: if moduloDaFuncao(col) && commonValid(request.resource.data) && noDeleteOnCreate(orgId) && obraValida(request.resource.data) && valoresValidos(request.resource.data)
+          && (col != 'works' || (request.resource.data.name is string && request.resource.data.name.size() > 0));
+        allow update: if moduloDaFuncao(col) && commonValid(request.resource.data) && noDeleteOnUpdate(orgId) && obraValida(request.resource.data) && valoresValidos(request.resource.data);
+      }
+      // Convite com função do ObraTop 3 (Gestor, Financeiro e Consulta: sem obra atribuída).
+      function conviteFuncao(code) { return get(/databases/$(database)/documents/invites/$(code)).data; }
+      match /members/{memberId} {
+        allow create: if signedIn() && request.auth.uid == memberId && request.resource.data.inviteCode is string
+          && conviteFuncao(request.resource.data.inviteCode).orgId == orgId
+          && conviteFuncao(request.resource.data.inviteCode).email == request.auth.token.email
+          && conviteFuncao(request.resource.data.inviteCode).expiresAt > request.time
+          && conviteFuncao(request.resource.data.inviteCode).get('role', 'project_user') in ['manager', 'finance', 'viewer']
+          && request.resource.data.role == conviteFuncao(request.resource.data.inviteCode).role
+          && request.resource.data.workId == conviteFuncao(request.resource.data.inviteCode).workId
+          && request.resource.data.status == 'active';
+        // O administrador muda função, obra e bloqueio de quem não é administrador.
+        allow update: if owner(orgId) && resource.data.role != 'owner'
+          && request.resource.data.role in ['project_user', 'manager', 'finance', 'viewer']
+          && request.resource.data.status in ['active', 'blocked']
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.get('inviteCode', '') == resource.data.get('inviteCode', '')
+          && (request.resource.data.role in ['manager', 'finance', 'viewer'] ? request.resource.data.workId == '' : validWorkRef(orgId, request.resource.data.workId));
+      }
+      // Trilha de auditoria: cada um registra só em seu nome (igual ao ObraTop); só o administrador lê.
       // Perfil de cada pessoa nos módulos novos: só o proprietário define.
       match /perfis/{uid} {
         allow read: if member(orgId);
@@ -36,8 +80,8 @@
         }
         match /redlines/{id} {
           allow read: if member(orgId);
-          allow create: if member(orgId) && request.resource.data.autorUid == request.auth.uid;
-          allow delete: if gestorAec(orgId) || (member(orgId) && resource.data.autorUid == request.auth.uid);
+          allow create: if escreve() && request.resource.data.autorUid == request.auth.uid;
+          allow delete: if gestorAec(orgId) || (escreve() && resource.data.autorUid == request.auth.uid);
           allow update: if false;
         }
         // Orçamentos do PROJETO (CUB). Os itens de orçamento da OBRA continuam em /budgets do ObraTop.
@@ -62,11 +106,11 @@
         }
         match /timesheets/{id} {
           allow read: if gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid);
-          allow create: if member(orgId) && request.resource.data.uid == request.auth.uid
+          allow create: if escreve() && request.resource.data.uid == request.auth.uid
             && request.resource.data.orgId == orgId
             && request.resource.data.minutos is number && request.resource.data.minutos > 0 && request.resource.data.minutos <= 1440;
-          allow update: if (gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid)) && naoAltera(['uid', 'orgId']);
-          allow delete: if gestorAec(orgId) || (member(orgId) && resource.data.uid == request.auth.uid);
+          allow update: if (gestorAec(orgId) || (escreve() && resource.data.uid == request.auth.uid)) && naoAltera(['uid', 'orgId']);
+          allow delete: if gestorAec(orgId) || (escreve() && resource.data.uid == request.auth.uid);
         }
       }
 

@@ -7,6 +7,7 @@ import { Bell, ChevronRight, CircleHelp, LogOut, Menu, Moon, Search, Sun, X } fr
 import { Nome, Simbolo } from '@/components/layout/marca';
 import { EntradaSemEmpresa } from '@/components/portal/portal-do-cliente';
 import { SincronizadorDePortais } from '@/components/portal/sincronizador';
+import { CapturaDeAvanco } from '@/components/layout/captura-avanco';
 import { Paleta } from '@/components/layout/paleta';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/form';
@@ -187,6 +188,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <Paleta aberta={paleta} onFechar={() => setPaleta(false)} />
       <SincronizadorDePortais />
+      <CapturaDeAvanco />
     </div>
   );
 }

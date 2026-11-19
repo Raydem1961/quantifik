@@ -7,15 +7,21 @@
  */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarRange, Download, FileText, FileUp, Flag, Paperclip, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { CalendarRange, CheckCheck, Sparkles, Download, FileText, FileUp, Flag, PackageCheck, Paperclip, Pencil, Plus, ReceiptText, ShoppingCart, Trash2, X } from 'lucide-react';
+import { AssistenteObra } from '@/components/gestao/assistente-obra';
+import { EditorFotos, RelatorioFotografico, type DiaFotos } from '@/components/fotos/fotos';
 import { GanttObra, type AtividadeGantt } from '@/components/gestao/gantt-obra';
 import { PageHeader } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, Field, Input, Segmented, Select, Textarea } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
-import { atualizarDoc, definirDoc, useColecao } from '@/hooks/use-colecao';
+import { atualizarDoc, atualizarEmLote, definirDoc, useColecao } from '@/hooks/use-colecao';
 import { brl, dataBr, num, pct } from '@/lib/format';
+import { apagarArquivos, enviarFotos, fotosDe, type FotoDiario, type FotoNova } from '@/lib/fotos';
+import { auditar } from '@/lib/auditoria';
+import { podeCriarObra, podeExcluir, podeGravarModulo, veDadosDePessoal, veTodasAsObras } from '@/lib/obratop/permissoes';
+import { avancoDoDiario, lancamentoDe, pedidoDeReposicao, situacaoEstoque } from '@/lib/obratop/fluxos';
 import { COLECAO_DA_REFERENCIA, ESQUEMAS, GRUPOS_MODULOS, MODULOS, rotuloRegistro, type CampoEsquema, type EsquemaModulo, type IdModulo } from '@/lib/obratop/esquemas';
 import { activityWeights, budgetSale, cashProjection, contractBalance, incurredCost, measurementNet, schedulePerformance } from '@/lib/obratop/vendor/calc.mjs';
 import { cpm, mspdiExport, parseMspdi, toActivities } from '@/lib/obratop/vendor/msproject.mjs';
@@ -31,23 +37,17 @@ const CAMPOS_MOEDA = /value|salary|cost|addendum|deduction/i;
 /** A exclusão no ObraTop é lógica: registros com `deleted` ficam no banco, fora das telas. */
 const vivos = (l: Reg[]) => l.filter((r) => !r.deleted);
 
-/**
- * Quem grava, pelas regras do ObraTop: o proprietário grava tudo; o usuário de obra grava só os
- * registros da obra a que está atribuído, não cria obras nem fornecedores e não exclui.
- */
-function podeGravar(dono: boolean, obraAtribuida: string | undefined, modulo: IdModulo, esquema: EsquemaModulo): boolean {
-  if (dono) return true;
-  if (!obraAtribuida || modulo === 'suppliers') return false;
-  return modulo === 'works' || esquema.fields.some((f) => f[0] === 'workId');
-}
-
 export function TelaGestao({ modulo }: { modulo: IdModulo }) {
   const router = useRouter();
-  const { tenantId, tenant, usuario, role, obraAtribuida } = useAuth();
-  const dono = role === 'socio_diretor';
+  const { tenantId, tenant, usuario, obraAtribuida, funcao } = useAuth();
+  // Quem vê todas as obras escolhe a obra no filtro; o engenheiro da obra fica na dele.
+  const veTodas = veTodasAsObras(funcao), apaga = podeExcluir(funcao), planeja = podeCriarObra(funcao);
   const setModulo = (m: IdModulo) => router.push(`/gestao/${m}/`);
-  const esquema: EsquemaModulo = ESQUEMAS[modulo];
-  const gravavel = podeGravar(dono, obraAtribuida, modulo, esquema);
+  // Salário e dados pessoais da equipe ficam fora da tela de quem não é Administrador ou Financeiro.
+  const esquemaBruto: EsquemaModulo = ESQUEMAS[modulo];
+  const esquema: EsquemaModulo = React.useMemo(() => (modulo === 'staff' && !veDadosDePessoal(funcao) ? { ...esquemaBruto, fields: esquemaBruto.fields.filter((f) => !['salary', 'cpf', 'birthDate'].includes(f[0])) } : esquemaBruto), [modulo, funcao, esquemaBruto]);
+  const gravavel = podeGravarModulo(funcao, modulo, esquema.fields.some((f) => f[0] === 'workId'), obraAtribuida);
+  const gravaFinanceiro = podeGravarModulo(funcao, 'finance', true, obraAtribuida), gravaEstoque = podeGravarModulo(funcao, 'inventory', true, obraAtribuida), gravaPedidos = podeGravarModulo(funcao, 'orders', true, obraAtribuida), gravaCronograma = podeGravarModulo(funcao, 'activities', true, obraAtribuida);
 
   // Coleções: a do módulo, obras (filtro e rótulos) e as apontadas por campos de referência.
   const { dados: brutos, carregando, erro } = useColecao<Reg>(modulo);
@@ -65,11 +65,29 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
 
   const [obraEscolhida, setObraId] = React.useState('');
   // O usuário de obra trabalha sempre na obra atribuída.
-  const obraId = dono ? obraEscolhida : (obraAtribuida ?? '');
+  const obraId = veTodas ? obraEscolhida : (obraAtribuida ?? '');
   const [busca, setBusca] = React.useState('');
-  const [visao, setVisao] = React.useState<'tabela' | 'gantt'>('tabela');
+  const [visao, setVisao] = React.useState<'tabela' | 'gantt' | 'fotos'>('tabela');
   const [editando, setEditando] = React.useState<Reg | 'novo' | null>(null);
   const [msg, setMsg] = React.useState<{ tipo: 'ok' | 'erro'; texto: string }>();
+  // Registro novo pré-preenchido vindo de outra tela (ex.: medição → lançamento financeiro).
+  const [iniciais, setIniciais] = React.useState<Record<string, unknown>>();
+  const [assistente, setAssistente] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const bruto = sessionStorage.getItem('obratop.prefill');
+      if (!bruto) return;
+      const p = JSON.parse(bruto) as { modulo: string; dados: Record<string, unknown>; aviso?: string };
+      if (p.modulo !== modulo) return;
+      sessionStorage.removeItem('obratop.prefill');
+      setIniciais(p.dados); setEditando('novo');
+      if (p.aviso) setMsg({ tipo: 'ok', texto: p.aviso });
+    } catch { /* sem armazenamento */ }
+  }, [modulo]);
+  const abrirPreenchido = (destino: IdModulo, dados: Record<string, unknown>, aviso: string) => {
+    try { sessionStorage.setItem('obratop.prefill', JSON.stringify({ modulo: destino, dados, aviso })); } catch { /* sem armazenamento */ }
+    router.push(`/gestao/${destino}/`);
+  };
   const temObra = esquema.fields.some((f) => f[0] === 'workId');
 
   const registros = React.useMemo(() => {
@@ -103,8 +121,10 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
     return [...curtas.filter((f) => f[3]), ...curtas.filter((f) => !f[3])].slice(0, 7);
   }, [esquema]);
 
-  const salvar = async (dados: Record<string, unknown>, id?: string, arquivo?: File | null) => {
+  const salvar = async (dados: Record<string, unknown>, id?: string, arquivo?: File | null, fotos?: { atuais: FotoDiario[]; novas: FotoNova[]; removidas: FotoDiario[] }) => {
     if (!tenantId) return;
+    const anterior = id ? vivos(brutos).find((r) => r.id === id) : undefined;
+    const idFinal = id ?? novoId();
     try {
       const agora = new Date().toISOString();
       if (arquivo) {
@@ -117,16 +137,104 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
           dados = { ...dados, fileUrl: await getDownloadURL(snap.ref), fileName: arquivo.name, storagePath: caminho };
         }
       }
+      if (fotos) {
+        // Fotos primeiro: se o envio falhar (sem internet), nada é gravado e o formulário continua aberto.
+        let enviadas: FotoDiario[] = [];
+        if (fotos.novas.length) {
+          if (!MODO_DEMO && typeof navigator !== 'undefined' && !navigator.onLine) { setMsg({ tipo: 'erro', texto: 'Sem internet: as fotos não podem ser enviadas agora. Salve sem as fotos novas ou tente quando a conexão voltar.' }); return; }
+          setMsg({ tipo: 'ok', texto: `Enviando ${fotos.novas.length} foto(s)…` });
+          enviadas = await enviarFotos(tenantId, String(dados.workId || ''), idFinal, fotos.novas, usuario?.uid ?? '', (f, t) => setMsg({ tipo: 'ok', texto: `Enviando fotos: ${f} de ${t}…` }));
+        }
+        dados = { ...dados, photos: [...fotos.atuais, ...enviadas] };
+      }
       if (id) await atualizarDoc(tenantId, `${modulo}/${id}`, { ...dados, updatedAt: agora, updatedBy: usuario?.uid ?? '' });
-      else await definirDoc(tenantId, `${modulo}/${novoId()}`, { ...dados, deleted: false, createdAt: agora, createdBy: usuario?.uid ?? '', updatedAt: agora });
+      else await definirDoc(tenantId, `${modulo}/${idFinal}`, { ...dados, deleted: false, createdAt: agora, createdBy: usuario?.uid ?? '', updatedAt: agora });
+      void auditar(tenantId, usuario, id ? 'update' : 'create', modulo, idFinal, anterior, dados);
+      if (fotos?.removidas.length) void apagarArquivos(fotos.removidas);
       setEditando(null);
-      if (!(arquivo && MODO_DEMO)) setMsg({ tipo: 'ok', texto: `${esquema.title}: registro ${id ? 'atualizado' : 'criado'}.` });
-    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível salvar. Seus dados continuam no formulário — verifique a conexão e a permissão.' }); }
+      if (!(arquivo && MODO_DEMO)) setMsg({ tipo: 'ok', texto: `${esquema.title}: registro ${id ? 'atualizado' : 'criado'}${fotos?.novas.length ? ` com ${fotos.novas.length} foto(s) nova(s)` : ''}.` });
+    } catch (e) {
+      const texto = e instanceof Error && /imagem|abrir|30 MB|não é uma/.test(e.message) ? e.message : 'Não foi possível salvar. Seus dados continuam no formulário — verifique a conexão e a permissão.';
+      setMsg({ tipo: 'erro', texto });
+    }
   };
   const excluir = async (r: Reg) => {
     if (!tenantId || !window.confirm(`Excluir "${rotuloRegistro(modulo, r) || 'este registro'}"?`)) return;
-    try { await atualizarDoc(tenantId, `${modulo}/${r.id}`, { deleted: true, deletedAt: new Date().toISOString(), deletedBy: usuario?.uid ?? '' }); }
-    catch { setMsg({ tipo: 'erro', texto: 'Não foi possível excluir o registro.' }); }
+    try {
+      await atualizarDoc(tenantId, `${modulo}/${r.id}`, { deleted: true, deletedAt: new Date().toISOString(), deletedBy: usuario?.uid ?? '' });
+      void auditar(tenantId, usuario, 'delete', modulo, r.id, r, { deleted: true });
+      setMsg({ tipo: 'ok', texto: 'Registro movido para a lixeira (Administrativo → Lixeira e auditoria).' });
+    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível excluir o registro.' }); }
+  };
+
+  // ── Ligações entre módulos (como no ObraTop 3) ─────────────────────────────
+  const { dados: estoqueTodo, carregando: carregandoEstoque } = useColecao<Reg>(modulo === 'orders' || modulo === 'inventory' ? 'inventory' : null);
+  const aplicarDiario = async (log: Reg) => {
+    if (!tenantId) return;
+    const atv = vivos(atividades).find((a) => a.id === log.activityId);
+    const r = avancoDoDiario(log, atv);
+    if ('erro' in r) { setMsg({ tipo: 'erro', texto: r.erro }); return; }
+    if (!window.confirm(`Aplicar ao cronograma?\n\n${String(atv!.name)}\nAvanço: ${r.de}% → ${r.para}%`)) return;
+    const agora = new Date().toISOString(), quem = usuario?.uid ?? '';
+    try {
+      await atualizarEmLote(tenantId, [
+        { caminho: `activities/${atv!.id}`, patch: { ...r.patch, updatedAt: agora, updatedBy: quem } },
+        { caminho: `dailyLogs/${log.id}`, patch: { appliedAt: agora, appliedProgress: r.para, updatedAt: agora, updatedBy: quem } },
+      ]);
+      void auditar(tenantId, usuario, 'rdo-apply', 'activities', atv!.id, { progress: r.de }, { progress: r.para, rdo: log.id });
+      setMsg({ tipo: 'ok', texto: `Avanço aplicado: ${String(atv!.name)} agora em ${r.para}%.` });
+    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível aplicar o avanço. Verifique a sua permissão nesta obra.' }); }
+  };
+  const lancarNoFinanceiro = (tipo: 'measurement' | 'order', r: Reg) => {
+    const campo = tipo === 'measurement' ? 'measurementId' : 'orderId';
+    const existe = vivos(financeiro).find((f) => f[campo] === r.id);
+    if (existe && !window.confirm(`Já existe um lançamento ligado a este registro (${String(existe.description ?? existe.id)}). Criar outro mesmo assim?`)) return;
+    abrirPreenchido('finance', lancamentoDe(tipo, r), 'Confira o lançamento pré-preenchido e clique em Salvar.');
+  };
+  const darEntrada = async (o: Reg) => {
+    if (!tenantId) return;
+    const inv = vivos(estoqueTodo).find((i) => i.id === o.inventoryId), qtd = Number(o.qty) || 0;
+    if (!inv || qtd <= 0) { setMsg({ tipo: 'erro', texto: 'Informe no pedido o material do estoque e a quantidade antes de dar entrada.' }); return; }
+    if (inv.workId !== o.workId) { setMsg({ tipo: 'erro', texto: 'O material pertence a outra obra.' }); return; }
+    if (!window.confirm(`Dar entrada de ${qtd.toLocaleString('pt-BR')} ${String(inv.unit ?? '')} de ${String(inv.material)} no estoque e marcar o pedido como Entregue?`)) return;
+    const agora = new Date().toISOString(), quem = usuario?.uid ?? '';
+    try {
+      await atualizarEmLote(tenantId, [
+        { caminho: `orders/${o.id}`, patch: { status: 'Entregue', stockReceivedAt: agora, stockReceivedBy: quem, updatedAt: agora, updatedBy: quem } },
+        { caminho: `inventory/${inv.id}`, patch: { date: agora.slice(0, 10), updatedAt: agora, updatedBy: quem }, soma: { currentStock: qtd } },
+      ]);
+      void auditar(tenantId, usuario, 'stock-receive', 'orders', o.id, { currentStock: inv.currentStock }, { inventoryId: inv.id, qty: qtd });
+      setMsg({ tipo: 'ok', texto: `Entrada registrada: +${qtd.toLocaleString('pt-BR')} ${String(inv.unit ?? '')} de ${String(inv.material)}.` });
+    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível registrar a entrada. Verifique a sua permissão nesta obra.' }); }
+  };
+  const pedirReposicao = (item: Reg) => {
+    const pedido = pedidoDeReposicao(item);
+    if (!pedido) { setMsg({ tipo: 'ok', texto: 'Este material não precisa de reposição agora.' }); return; }
+    abrirPreenchido('orders', pedido, 'Pedido de reposição calculado pelo ponto de pedido. Confira e clique em Salvar.');
+  };
+  const nomeAtividade = (id: unknown) => { const a = vivos(atividades).find((x) => x.id === id); return a ? [a.wbs, a.name].filter(Boolean).join(' ') : ''; };
+  const diasComFotos: DiaFotos[] = React.useMemo(() => modulo !== 'dailyLogs' ? [] : registros
+    .map((r) => ({ data: String(r.date ?? '').slice(0, 10), titulo: obraId ? undefined : String(obras.find((o) => o.id === r.workId)?.name ?? ''), clima: String(r.weather ?? ''), servicos: String(r.services ?? ''),
+      fotos: fotosDe(r).map((f) => ({ url: f.url, thumb: f.thumb, legenda: f.legenda, servico: nomeAtividade(f.activityId), data: String(r.date ?? '') })) }))
+    .filter((d) => d.fotos.length > 0 && d.data)
+    .sort((a, b) => b.data.localeCompare(a.data)), [modulo, registros, obraId, obras, atividades]); // eslint-disable-line react-hooks/exhaustive-deps -- nomeAtividade lê atividades
+
+  /** Exporta os registros filtrados (todas as colunas do cadastro) em CSV que abre no Excel. */
+  const exportarCsv = () => {
+    const campos = esquema.fields.filter((f) => f[2] !== 'file');
+    const celula = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const valor = (f: CampoEsquema, r: Reg) => {
+      const v = r[f[0]];
+      if (v == null || v === '') return '';
+      if (f[2] === 'date') return dataBr(String(v));
+      if (f[2] === 'number') return String(Number(v)).replace('.', ',');
+      if (COLECAO_DA_REFERENCIA[f[2]]) return nomeRef(f, v);
+      return String(v);
+    };
+    const linhas = [campos.map((f) => f[1]), ...registros.map((r) => campos.map((f) => valor(f, r)))];
+    const url = URL.createObjectURL(new Blob([`\ufeff${linhas.map((l) => l.map(celula).join(';')).join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = `ObraTop_${esquema.title.replace(/[^\wÀ-ú]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 20000);
   };
 
   // ── MS Project ───────────────────────────────────────────────────────────
@@ -320,28 +428,34 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
         </div>
       )}
 
-      {editando && <Formulario key={editando === 'novo' ? 'novo' : editando.id} esquema={esquema} modulo={modulo} registro={editando === 'novo' ? null : editando} obraPadrao={obraId} referencias={referencias} onCancelar={() => setEditando(null)} onSalvar={salvar} />}
+      {assistente && modulo === 'works' && <AssistenteObra nomesExistentes={obras.map((o) => String(o.name ?? ''))} onFechar={() => setAssistente(false)} onCriada={(id, texto) => { setAssistente(false); setObraId(id); setMsg({ tipo: 'ok', texto }); }} />}
+      {editando && <Formulario key={editando === 'novo' ? 'novo' : editando.id} esquema={esquema} modulo={modulo} registro={editando === 'novo' ? null : editando} obraPadrao={obraId} referencias={referencias} atividades={vivos(atividades)} iniciais={editando === 'novo' ? iniciais : undefined} onCancelar={() => { setEditando(null); setIniciais(undefined); }} onSalvar={salvar} />}
 
       <Card>
         <CardHeader className="flex-row flex-wrap items-end justify-between gap-3">
           <div><CardTitle>{esquema.title}</CardTitle><CardDescription className="mt-1">{registros.length} registro(s){obraId && temObra ? ' nesta obra' : ''}</CardDescription></div>
           <div className="flex flex-wrap items-end gap-2">
-            {dono && (temObra || modulo === 'activities') && <Select className="w-56" aria-label="Filtrar por obra" value={modulo === 'activities' && visao === 'gantt' ? obraSel?.id ?? '' : obraId} onChange={(e) => setObraId(e.target.value)}>
+            {veTodas && (temObra || modulo === 'activities') && <Select className="w-56" aria-label="Filtrar por obra" value={modulo === 'activities' && visao === 'gantt' ? obraSel?.id ?? '' : obraId} onChange={(e) => setObraId(e.target.value)}>
               {!(modulo === 'activities' && visao === 'gantt') && <option value="">Todas as obras</option>}
               {obras.map((o) => <option key={o.id} value={o.id}>{String(o.name)}</option>)}
             </Select>}
             <Input className="w-48" placeholder="Buscar…" aria-label="Buscar nos registros" value={busca} onChange={(e) => setBusca(e.target.value)} />
             {modulo === 'activities' && <Segmented value={visao} onChange={setVisao} options={[{ value: 'tabela', label: 'Tabela' }, { value: 'gantt', label: 'Gantt' }]} />}
+            {modulo === 'dailyLogs' && <Segmented value={visao === 'fotos' ? 'fotos' : 'tabela'} onChange={setVisao} options={[{ value: 'tabela', label: 'Registros' }, { value: 'fotos', label: 'Relatório fotográfico' }]} />}
             {modulo === 'activities' && obraSel && <Button variant="outline" onClick={exportarProject}><Download className="h-4 w-4" />MS Project</Button>}
             {modulo === 'activities' && obraSel && gravavel && <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-4 text-sm font-medium hover:bg-accent focus-within:ring-2 focus-within:ring-ring"><FileUp className="h-4 w-4" />Importar XML
               <input type="file" accept=".xml" className="sr-only" onChange={(e) => { const a = e.target.files?.[0]; e.target.value = ''; if (a) void importarProject(a); }} /></label>}
-            {modulo === 'activities' && obraSel && dono && <Button variant="outline" onClick={() => void congelarLinhaBase()}><Flag className="h-4 w-4" />{linhaBase ? `Replanejar (base rev. ${linhaBase.revision})` : 'Congelar linha de base'}</Button>}
-            {modulo === 'budgets' && obraId && dono && <Button variant="outline" onClick={() => void gerarCronograma()}><CalendarRange className="h-4 w-4" />Gerar cronograma</Button>}
-            {gravavel && (dono || modulo !== 'works') && <Button onClick={() => setEditando('novo')}><Plus className="h-4 w-4" />Novo</Button>}
+            {modulo === 'activities' && obraSel && planeja && <Button variant="outline" onClick={() => void congelarLinhaBase()}><Flag className="h-4 w-4" />{linhaBase ? `Replanejar (base rev. ${linhaBase.revision})` : 'Congelar linha de base'}</Button>}
+            {modulo === 'budgets' && obraId && planeja && <Button variant="outline" onClick={() => void gerarCronograma()}><CalendarRange className="h-4 w-4" />Gerar cronograma</Button>}
+            {modulo === 'works' && planeja && <Button variant="outline" onClick={() => { setAssistente(true); setEditando(null); }}><Sparkles className="h-4 w-4" />Nova obra por modelo</Button>}
+            {registros.length > 0 && visao !== 'fotos' && <Button variant="outline" onClick={exportarCsv}><Download className="h-4 w-4" />Planilha</Button>}
+            {gravavel && (planeja || modulo !== 'works') && <Button onClick={() => setEditando('novo')}><Plus className="h-4 w-4" />Novo</Button>}
           </div>
         </CardHeader>
         <CardContent>
           {carregando ? <p className="py-10 text-center text-sm text-muted-foreground">Carregando…</p>
+            : modulo === 'dailyLogs' && visao === 'fotos' ? <RelatorioFotografico dias={diasComFotos} vazio={busca ? 'Nenhuma foto para esta busca.' : 'Nenhuma foto ainda. Abra um diário (Novo ou o lápis) e use "Tirar foto" ou "Escolher fotos".'}
+                cabecalho={<div className="mb-6 border-b pb-3"><p className="text-xs uppercase tracking-wider text-muted-foreground">{tenant?.nomeFantasia} · Relatório fotográfico</p><p className="text-lg font-semibold">{obraId ? String(obras.find((o) => o.id === obraId)?.name ?? '') : 'Todas as obras'}</p><p className="text-xs text-muted-foreground">Emitido em {new Date().toLocaleDateString('pt-BR')}</p></div>} />
             : modulo === 'activities' && visao === 'gantt' ? <GanttObra atividades={atividadesDaObra as unknown as AtividadeGantt[]} linhaBase={linhaBase?.items} onAbrir={gravavel ? (id) => setEditando(atividadesDaObra.find((a) => a.id === id) ?? null) : undefined} />
             : registros.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">Nenhum registro{busca ? ' para esta busca' : ''}. {gravavel && !busca ? 'Use "Novo" para começar.' : ''}</p>
             : (
@@ -353,6 +467,8 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
                     {modulo === 'contracts' && <th className="px-2 py-2 text-right font-medium">Saldo a medir</th>}
                     {modulo === 'budgets' && <th className="px-2 py-2 text-right font-medium">Preço de venda</th>}
                     {modulo === 'documents' && <th className="px-2 py-2 font-medium">Arquivo</th>}
+                    {modulo === 'dailyLogs' && <th className="px-2 py-2 font-medium">Fotos</th>}
+                    {modulo === 'inventory' && <th className="px-2 py-2 font-medium">Situação</th>}
                     <th className="w-20"><span className="sr-only">Ações</span></th>
                   </tr></thead>
                   <tbody className="divide-y">
@@ -362,10 +478,20 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
                         {modulo === 'measurements' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(measurementNet(r).net)}</td>}
                         {modulo === 'contracts' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(contractBalance(r, medicoes).balance)} <span className="font-normal text-muted-foreground">({pct(contractBalance(r, medicoes).percentLeft / 100, 0)})</span></td>}
                         {modulo === 'budgets' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(budgetSale(r))}</td>}
+                        {modulo === 'dailyLogs' && <td className="px-2 py-2">{(() => { const f = fotosDe(r); return f.length === 0 ? <span className="text-muted-foreground">—</span> : (
+                          <button type="button" className="flex items-center gap-1" aria-label={`Ver ${f.length} foto(s) de ${dataBr(String(r.date ?? ''))}`} onClick={() => setVisao('fotos')}>
+                            {/* eslint-disable-next-line @next/next/no-img-element -- miniaturas */}
+                            {f.slice(0, 3).map((x) => <img key={x.id} src={x.thumb} alt="" className="h-9 w-9 rounded object-cover" />)}{f.length > 3 && <span className="text-xs text-muted-foreground">+{f.length - 3}</span>}
+                          </button>); })()}</td>}
+                        {modulo === 'inventory' && <td className="px-2 py-2">{(() => { const z = situacaoEstoque(r); return <Badge variant={z.nivel === 'bad' ? 'destructive' : z.nivel === 'warn' || z.nivel === 'over' ? 'warning' : z.nivel === 'ok' ? 'success' : 'default'} title={z.acao}>{z.rotulo}</Badge>; })()}</td>}
                         {modulo === 'documents' && <td className="max-w-[200px] truncate px-2 py-2">{r.fileUrl ? <a href={String(r.fileUrl)} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">{String(r.fileName ?? 'abrir')}</a> : <span className="text-muted-foreground">—</span>}</td>}
                         <td className="whitespace-nowrap py-1 text-right">
+                          {gravaCronograma && modulo === 'dailyLogs' && !!r.activityId && Number(r.progressTo) > 0 && !r.appliedAt && <Button size="icon" variant="ghost" title="Aplicar o avanço ao cronograma" aria-label={`Aplicar ao cronograma o avanço do diário de ${dataBr(String(r.date ?? ''))}`} onClick={() => void aplicarDiario(r)}><CheckCheck className="h-4 w-4" /></Button>}
+                          {gravaFinanceiro && (modulo === 'measurements' || modulo === 'orders') && <Button size="icon" variant="ghost" title="Lançar no financeiro" aria-label={`Lançar no financeiro: ${rotuloRegistro(modulo, r)}`} onClick={() => lancarNoFinanceiro(modulo === 'measurements' ? 'measurement' : 'order', r)}><ReceiptText className="h-4 w-4" /></Button>}
+                          {gravavel && gravaEstoque && !carregandoEstoque && modulo === 'orders' && !!r.inventoryId && !r.stockReceivedAt && r.status !== 'Cancelado' && <Button size="icon" variant="ghost" title="Dar entrada no estoque" aria-label={`Dar entrada no estoque: ${rotuloRegistro(modulo, r)}`} onClick={() => void darEntrada(r)}><PackageCheck className="h-4 w-4" /></Button>}
+                          {gravaPedidos && modulo === 'inventory' && ['bad', 'warn'].includes(situacaoEstoque(r).nivel) && <Button size="icon" variant="ghost" title="Pedir reposição" aria-label={`Pedir reposição: ${rotuloRegistro(modulo, r)}`} onClick={() => pedirReposicao(r)}><ShoppingCart className="h-4 w-4" /></Button>}
                           {gravavel && <><Button size="icon" variant="ghost" aria-label={`Editar ${rotuloRegistro(modulo, r)}`} onClick={() => { setEditando(r); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Pencil className="h-4 w-4" /></Button>
-                            {dono && <Button size="icon" variant="ghost" aria-label={`Excluir ${rotuloRegistro(modulo, r)}`} onClick={() => void excluir(r)}><Trash2 className="h-4 w-4" /></Button>}</>}
+                            {apaga && <Button size="icon" variant="ghost" aria-label={`Excluir ${rotuloRegistro(modulo, r)}`} onClick={() => void excluir(r)}><Trash2 className="h-4 w-4" /></Button>}</>}
                         </td>
                       </tr>
                     ))}
@@ -379,13 +505,14 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
   );
 }
 
-function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCancelar, onSalvar }: {
+function Formulario({ esquema, modulo, registro, obraPadrao, referencias, atividades, iniciais, onCancelar, onSalvar }: {
   esquema: EsquemaModulo; modulo: IdModulo; registro: Reg | null; obraPadrao: string; referencias: Partial<Record<IdModulo, Reg[]>>;
-  onCancelar: () => void; onSalvar: (dados: Record<string, unknown>, id?: string, arquivo?: File | null) => Promise<void>;
+  atividades: Reg[]; iniciais?: Record<string, unknown>; onCancelar: () => void; onSalvar: (dados: Record<string, unknown>, id?: string, arquivo?: File | null, fotos?: { atuais: FotoDiario[]; novas: FotoNova[]; removidas: FotoDiario[] }) => Promise<void>;
 }) {
   const [v, setV] = React.useState<Record<string, string>>(() => {
     const ini: Record<string, string> = {};
     for (const f of esquema.fields) ini[f[0]] = registro?.[f[0]] != null ? String(registro[f[0]]) : f[0] === 'workId' ? obraPadrao : f[2] === 'select' ? f[4]?.[0] ?? '' : f[2] === 'date' && f[3] && f[0] === 'date' ? new Date().toISOString().slice(0, 10) : '';
+    if (!registro && iniciais) for (const [k, val] of Object.entries(iniciais)) if (val != null && esquema.fields.some((f) => f[0] === k)) ini[k] = String(val);
     return ini;
   });
   const [erros, setErros] = React.useState<Record<string, string>>({});
@@ -393,6 +520,13 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
   const [arquivo, setArquivo] = React.useState<File | null>(null);
   const campos = esquema.fields.filter((f) => f[2] !== 'file');
   const temArquivo = esquema.fields.some((f) => f[2] === 'file');
+  const comFotos = modulo === 'dailyLogs';
+  const originais = React.useMemo(() => fotosDe(registro), [registro]);
+  const [fotosAtuais, setFotosAtuais] = React.useState<FotoDiario[]>(originais);
+  const [fotosNovas, setFotosNovas] = React.useState<FotoNova[]>([]);
+  const servicos = React.useMemo(() => atividades.filter((a) => !v.workId || a.workId === v.workId)
+    .sort((a, b) => String(a.wbs ?? '').localeCompare(String(b.wbs ?? ''), undefined, { numeric: true }))
+    .map((a) => ({ id: a.id, rotulo: [a.wbs, a.name].filter(Boolean).join(' ') })), [atividades, v.workId]);
 
   const enviar = async () => {
     const e: Record<string, string> = {};
@@ -418,7 +552,8 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
     setErros(e);
     if (Object.keys(e).length) return;
     setSalvando(true);
-    await onSalvar(dados, registro?.id, arquivo);
+    if (!registro && iniciais) for (const k of ['measurementId', 'orderId', 'contractId', 'inventoryId', 'qty']) if (iniciais[k] != null && dados[k] === undefined) dados[k] = iniciais[k];
+    await onSalvar(dados, registro?.id, arquivo, comFotos ? { atuais: fotosAtuais, novas: fotosNovas, removidas: originais.filter((o) => !fotosAtuais.some((f) => f.id === o.id)) } : undefined);
     setSalvando(false);
   };
 
@@ -443,6 +578,7 @@ function Formulario({ esquema, modulo, registro, obraPadrao, referencias, onCanc
               </Field>
             );
           })}
+          {comFotos && <EditorFotos atuais={fotosAtuais} setAtuais={setFotosAtuais} novas={fotosNovas} setNovas={setFotosNovas} atividades={servicos} desabilitado={salvando} />}
           <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-3">
             <Button type="submit" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Button>
             <Button variant="ghost" onClick={onCancelar}>Cancelar</Button>

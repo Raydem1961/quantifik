@@ -15,7 +15,7 @@ import type { Project } from '@/lib/types';
 const saudacao = (h: number) => (h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite');
 
 export default function Inicio() {
-  const { usuario, tenant, role } = useAuth();
+  const { usuario, tenant, funcao } = useAuth();
   const d = useDados();
   const { dados: projetos } = useColecao<Project>('projects');
   // Data e hora só depois de montar: a página é pré-renderizada e não pode fixar o dia da compilação.
@@ -87,7 +87,7 @@ export default function Inicio() {
               })}</div>
             )}
           </section>
-          {role === 'socio_diretor' && (
+          {(funcao === 'owner' || funcao === 'manager' || funcao === 'finance') && (
             <section className="rounded-2xl border bg-card p-5">
               <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold tracking-tight">Fluxo de caixa projetado</h2>
                 <Link href="/area/financeiro/" className="text-xs font-medium text-primary underline-offset-2 hover:underline">Financeiro</Link></div>

@@ -87,3 +87,13 @@
   .aurora::before, .entrar { animation: none; }
   .tile, .tile:hover { transition: none; transform: none; }
 }
+
+/* Impressão do relatório fotográfico: somente o caminho até o relatório aparece no papel. */
+@media print {
+  body[data-imprimir='fotos'] aside,
+  body[data-imprimir='fotos'] *:has(> main) > :not(main),
+  body[data-imprimir='fotos'] main *:not(:has(.relatorio-fotos)):not(.relatorio-fotos):not(.relatorio-fotos *) { display: none !important; }
+  body[data-imprimir='fotos'] main, body[data-imprimir='fotos'] main *:has(.relatorio-fotos) { border: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; background: none !important; }
+  .relatorio-fotos li { break-inside: avoid; }
+  .relatorio-fotos img { max-height: 70mm; }
+}

@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { atualizarDoc, definirDoc, useColecao } from '@/hooks/use-colecao';
 import { brl, dataBr } from '@/lib/format';
 import type { Aba } from '@/lib/integracoes/abas';
+import { podeGravarModulo, veDadosDePessoal, veTodasAsObras } from '@/lib/obratop/permissoes';
 import { cnpjValido, formatarCnpj, soDigitos } from '@/lib/integracoes/documentos';
 import { conferir, planilhaTrabalhadores, type Pessoa } from '@/lib/integracoes/esocial';
 import { lerNfe, parcelasDaNfe, type Nfe } from '@/lib/integracoes/nfe';
@@ -39,16 +40,17 @@ const Arquivo = ({ rotulo, aceita, multiplo, onArquivos }: { rotulo: string; ace
 
 /** Obra em que os lançamentos novos entram: o proprietário escolhe; o usuário de obra usa a sua. */
 function useObra() {
-  const { role, obraAtribuida } = useAuth();
+  const { funcao, obraAtribuida } = useAuth();
   const { dados } = useColecao<Reg>('works');
   const obras = React.useMemo(() => dados.filter((o) => !o.deleted), [dados]);
-  const dono = role === 'socio_diretor';
+  const dono = veTodasAsObras(funcao); // escolhe a obra; cadastra fornecedor se a função permitir
+  const cadastraFornecedor = podeGravarModulo(funcao, 'suppliers', false, obraAtribuida);
   const [escolhida, setEscolhida] = React.useState('');
   const obraId = dono ? (escolhida || String(obras[0]?.id ?? '')) : (obraAtribuida ?? '');
   const seletor = dono
     ? <Field label="Obra dos novos lançamentos" className="w-64"><Select value={obraId} onChange={(e) => setEscolhida(e.target.value)}>{obras.length === 0 && <option value="">Cadastre uma obra</option>}{obras.map((o) => <option key={o.id} value={o.id}>{String(o.name)}</option>)}</Select></Field>
     : null;
-  return { obraId, seletor, dono, obras };
+  return { obraId, seletor, dono: cadastraFornecedor, obras };
 }
 
 // ───────────────────────────── Bancos ─────────────────────────────
@@ -290,10 +292,12 @@ function Fiscal() {
 
 // ───────────────────────────── eSocial ─────────────────────────────
 function Esocial() {
+  const { funcao } = useAuth();
   const { dados: pessoal } = useColecao<Pessoa>('staff');
   const { obras } = useObra();
   const lista = React.useMemo(() => conferir(pessoal), [pessoal]);
   const prontas = lista.filter((l) => l.pendencias.length === 0).length;
+  if (!veDadosDePessoal(funcao)) return <Card><CardContent className="p-6 text-sm text-muted-foreground">A conferência do eSocial mostra CPF, nascimento e salário: fica disponível ao Administrador e ao Financeiro.</CardContent></Card>;
   const baixar = () => {
     const url = URL.createObjectURL(new Blob([planilhaTrabalhadores(lista, (id) => String(obras.find((o) => o.id === id)?.name ?? ''))], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a'); a.href = url; a.download = `trabalhadores-esocial-${hoje()}.csv`; a.click(); URL.revokeObjectURL(url);

@@ -10,6 +10,7 @@ const MATRIZ: Record<Role, Permissao[]> = {
   coordenador: ['projeto.editar', 'cad.enviar', 'cad.excluir', 'orcamento.editar', 'contrato.editar', 'timesheet.lancar'],
   orcamentista: ['orcamento.editar', 'cad.enviar', 'timesheet.lancar'],
   projetista: ['cad.enviar', 'timesheet.lancar'],
+  consulta: [],
   cliente: [],
 };
 

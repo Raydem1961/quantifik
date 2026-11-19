@@ -20,7 +20,7 @@
  * cubTables/{UF_YYYY-MM}            (global; somente Admin SDK grava)
  */
 
-export type Role = 'socio_diretor' | 'coordenador' | 'orcamentista' | 'projetista' | 'cliente';
+export type Role = 'socio_diretor' | 'coordenador' | 'orcamentista' | 'projetista' | 'consulta' | 'cliente';
 
 export type UF =
   | 'AC' | 'AL' | 'AP' | 'AM' | 'BA' | 'CE' | 'DF' | 'ES' | 'GO' | 'MA' | 'MT' | 'MS' | 'MG' | 'PA'
@@ -89,6 +89,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   coordenador: 'Coordenador',
   orcamentista: 'Orçamentista',
   projetista: 'Projetista',
+  consulta: 'Consulta',
   cliente: 'Cliente',
 };
 
@@ -105,6 +106,8 @@ export interface Tenant {
   webhookUrl?: string;
   /** Custo médio da hora técnica (R$/h) usado no cálculo de margem do timesheet. */
   custoHoraTecnica: number;
+  /** Contatos da empresa (mesmos campos do ObraTop 3). */
+  contato: { endereco: string; telefone: string; email: string; engenheiroPadrao: string };
 }
 
 export interface Member {

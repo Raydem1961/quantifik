@@ -5,7 +5,10 @@ import { AlertTriangle, CalendarClock, CheckCircle2, CircleDollarSign, Clock3, F
 import { Button } from '@/components/ui/button';
 import { Badge, Segmented } from '@/components/ui/form';
 import { brl, brlCompacto, dataBr } from '@/lib/format';
-import type { Etapa, Parcela, PontoCurva, Portal } from '@/lib/portal';
+import { RelatorioFotografico } from '@/components/fotos/fotos';
+import { useMesDeFotos } from '@/lib/portal-dados';
+import type { Etapa, MesFotos, Parcela, PontoCurva, Portal } from '@/lib/portal';
+import { Select } from '@/components/ui/form';
 import { cn } from '@/lib/utils';
 
 const pc = (v: number, casas = 1) => `${v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
@@ -73,7 +76,29 @@ function CurvaS({ pontos, modo, hoje }: { pontos: PontoCurva[]; modo: 'fisico' |
 const TOM_ETAPA: Record<Etapa['situacao'], [string, 'success' | 'primary' | 'destructive' | 'default']> = { concluida: ['Concluída', 'success'], em_andamento: ['Em andamento', 'primary'], atrasada: ['Atrasada', 'destructive'], a_iniciar: ['A iniciar', 'default'] };
 const TOM_PARCELA: Record<Parcela['situacao'], [string, 'success' | 'warning' | 'destructive' | 'default']> = { paga: ['Paga', 'success'], vence_em_breve: ['Vence em breve', 'warning'], vencida: ['Vencida', 'destructive'], a_vencer: ['A vencer', 'default'] };
 
-export function PainelCliente({ portal: p, acoes }: { portal: Portal; acoes?: React.ReactNode }) {
+/** Relatório fotográfico do contrato: um mês por vez (o cliente escolhe o mês). */
+function SecaoFotos({ portal, fotosLocais }: { portal: Portal; fotosLocais?: MesFotos[] }) {
+  const indice = fotosLocais ? fotosLocais.map((m) => ({ mes: m.mes, rotulo: m.rotulo })) : (portal.fotosMeses ?? []);
+  const [mes, setMes] = React.useState<string | null>(indice[0]?.mes ?? null);
+  const remoto = useMesDeFotos(fotosLocais ? null : portal, fotosLocais ? null : mes);
+  if (indice.length === 0) return null;
+  const atual = fotosLocais ? fotosLocais.find((m) => m.mes === mes) ?? null : remoto.mes;
+  const dias = (atual?.dias ?? []).map((d) => ({ data: d.data, clima: d.clima, servicos: d.servicos, fotos: d.fotos.map((f) => ({ ...f, data: d.data })) }));
+  return (
+    <Secao className="mt-4" titulo="Relatório fotográfico" sub="Fotos diárias do andamento dos serviços, registradas pela equipe da obra.">
+      <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
+        <Select aria-label="Mês do relatório fotográfico" className="w-56" value={mes ?? ''} onChange={(e) => setMes(e.target.value)}>
+          {indice.map((m) => <option key={m.mes} value={m.mes}>{m.rotulo}{'fotos' in m ? ` (${(m as { fotos: number }).fotos} fotos)` : ''}</option>)}
+        </Select>
+      </div>
+      {!fotosLocais && remoto.carregando ? <p className="py-6 text-center text-sm text-muted-foreground">Carregando fotos…</p>
+        : <RelatorioFotografico dias={dias} vazio="Nenhuma foto neste mês."
+            cabecalho={<div className="mb-6 border-b pb-3"><p className="text-xs uppercase tracking-wider text-muted-foreground">{portal.empresa.nome} · Relatório fotográfico</p><p className="text-lg font-semibold">{portal.obra.nome}</p><p className="text-xs text-muted-foreground">{atual?.rotulo} · {portal.obra.cliente}</p></div>} />}
+    </Secao>
+  );
+}
+
+export function PainelCliente({ portal: p, acoes, fotosLocais }: { portal: Portal; acoes?: React.ReactNode; fotosLocais?: MesFotos[] }) {
   const [modo, setModo] = React.useState<'fisico' | 'financeiro'>('fisico');
   const i = p.indicadores, k = p.contrato;
   const atraso = i.desvio <= -5, prazoPct = i.prazoTotalDias ? Math.min(100, (i.diasDecorridos / i.prazoTotalDias) * 100) : 0;
@@ -162,6 +187,8 @@ export function PainelCliente({ portal: p, acoes }: { portal: Portal; acoes?: Re
           ))}</ul>
         )}
       </Secao>
+
+      <SecaoFotos key={`${p.orgId}_${p.workId}`} portal={p} fotosLocais={fotosLocais} />
 
       {(p.diario.length > 0 || p.documentos.length > 0) && (
         <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">

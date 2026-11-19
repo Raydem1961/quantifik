@@ -11,6 +11,7 @@ import { fluxoDeCaixa, kpisDaArea, pendencias, type Dados, type Kpi } from '@/li
 import { areaPorId, corDaArea, type Area } from '@/lib/modulos';
 import { weightedProgress } from '@/lib/obratop/vendor/calc.mjs';
 import type { Project } from '@/lib/types';
+import { veDadosDePessoal } from '@/lib/obratop/permissoes';
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -64,13 +65,13 @@ function Painel({ titulo, sub, children }: { titulo: string; sub?: string; child
 
 export function TelaArea({ id }: { id: string }) {
   const area = areaPorId(id);
-  const { role } = useAuth();
+  const { role, funcao } = useAuth();
   const d = useDados();
   const { dados: projetos } = useColecao<Project>('projects');
   const { dados: cotacoes } = useColecao<{ id: string }>('cotacoes');
   if (!area) return null;
   const dia = hoje();
-  const kpis = kpisDeProjetos(area.id, projetos, cotacoes.length) ?? kpisDaArea(area.id, d, dia);
+  const kpis = kpisDeProjetos(area.id, projetos, cotacoes.length) ?? kpisDaArea(area.id, d, dia, veDadosDePessoal(funcao));
   const pend = pendencias(d, dia).filter((p) => p.area === area.id);
   const telas = area.telas.filter((t) => !t.soDono || role === 'socio_diretor');
   return (

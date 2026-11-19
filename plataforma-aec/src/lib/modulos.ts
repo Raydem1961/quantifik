@@ -5,7 +5,7 @@
 import {
   BadgeDollarSign, Boxes, Briefcase, Building, Building2, CalendarRange, Calculator, ClipboardCheck, ClipboardList, Compass, FileSignature, FileText,
   FolderKanban, Gauge, Hammer, HardHat, Landmark, LayoutGrid, NotebookPen, Package, PenTool, Ruler, ScrollText, ShieldAlert, ShieldCheck, ShoppingCart,
-  Store, Truck, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, type LucideIcon,
+  Store, Truck, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, DatabaseBackup, TrendingUp, type LucideIcon,
 } from 'lucide-react';
 
 export type IdArea = 'clientes' | 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
@@ -55,6 +55,7 @@ export const AREAS: Area[] = [
     { href: '/gestao/contracts/', rotulo: 'Contratos de obra', icone: FileText, descricao: 'Valores, aditivos e saldo a medir' },
     { href: '/integracoes/bancos/', rotulo: 'Bancos e Pix', icone: Banknote, descricao: 'Conciliação do extrato (OFX) e cobrança por Pix' },
     { href: '/integracoes/fiscal/', rotulo: 'Notas fiscais e CNPJ', icone: Receipt, descricao: 'NF-e de compra vira fornecedor e contas a pagar' },
+    { href: '/economia/', rotulo: 'Análise econômica', icone: TrendingUp, descricao: 'Margem estimada, Curva ABC de custos, sensibilidade e reajuste' },
   ] },
   { id: 'rh', nome: 'Recursos Humanos', resumo: 'Pessoas, alocação e horas.', icone: Users, matiz: 292, telas: [
     { href: '/gestao/staff/', rotulo: 'Pessoal', icone: Users, descricao: 'Equipe, funções, salários e alocação por obra' },
@@ -76,6 +77,8 @@ export const AREAS: Area[] = [
   ] },
   { id: 'administrativo', nome: 'Administrativo', resumo: 'Empresa, equipe e acessos.', icone: Building, matiz: 222, telas: [
     { href: '/admin/', rotulo: 'Empresa e equipe', icone: UserCog, descricao: 'Dados da empresa, responsável técnico, usuários e convites', soDono: true },
+    { href: '/admin/seguranca/', rotulo: 'Lixeira e auditoria', icone: ShieldCheck, descricao: 'Recupere registros excluídos e veja quem alterou o quê', soDono: true },
+    { href: '/admin/backup/', rotulo: 'Backup e restauração', icone: DatabaseBackup, descricao: 'Cópia completa dos dados com conferência de integridade', soDono: true },
     { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivo geral da empresa e das obras' },
   ] },
 ];

@@ -1,3 +1,10 @@
+    // Gestor do ObraTop (todas as obras): envia anexos de documentos e fotos do diário.
+    function gestorStorage(orgId) {
+      return member(orgId) && firestore.get(/databases/(default)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.get('role', '') == 'manager';
+    }
+    match /organizations/{orgId}/documents/{workId}/{fileName} {
+      allow create: if gestorStorage(orgId) && safeFile();
+    }
     // CAD: organizations/{org}/projects/{p}/cad/{disciplina}/{carimbo}__{arquivo}
     // Objetos são imutáveis (cada upload é uma nova revisão) — por isso não há `update`.
     match /organizations/{orgId}/projects/{projectId}/cad/{disciplina}/{arquivo} {
@@ -17,4 +24,13 @@
     match /organizations/{orgId}/branding/{arquivo} {
       allow read: if member(orgId);
       allow write: if owner(orgId) && request.resource.contentType.matches('image/.*') && request.resource.size < 2 * 1024 * 1024;
+    }
+    // Fotos do Diário de Obra (JPG já comprimido no aparelho). Quem grava na obra envia e remove.
+    match /organizations/{orgId}/diario/{workId}/{logId}/{arquivo} {
+      allow read: if member(orgId);
+      allow create: if (owner(orgId) || assigned(orgId, workId) || gestorStorage(orgId))
+        && request.resource.contentType == 'image/jpeg' && request.resource.size < 6 * 1024 * 1024
+        && request.resource.metadata.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if owner(orgId) || assigned(orgId, workId) || gestorStorage(orgId);
     }

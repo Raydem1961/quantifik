@@ -31,6 +31,9 @@ beforeEach(async () => {
     await setDoc(doc(db, `${O}/members/proj`), m('project_user', { workId: 'w1' }));
     await setDoc(doc(db, `${O}/members/outraObra`), m('project_user', { workId: 'w2' }));
     await setDoc(doc(db, `${O}/members/bloqueado`), { ...m('project_user', { workId: 'w1' }), status: 'blocked' });
+    await setDoc(doc(db, `${O}/members/gestor`), m('manager', { workId: '' }));
+    await setDoc(doc(db, `${O}/members/financeiro`), m('finance', { workId: '' }));
+    await setDoc(doc(db, `${O}/members/consulta`), m('viewer', { workId: '' }));
     await setDoc(doc(db, 'organizations/B/members/donoB'), m('owner'));
     await setDoc(doc(db, `${O}/perfis/coord`), { perfil: 'coordenador' });
     await setDoc(doc(db, `${O}/perfis/orc`), { perfil: 'orcamentista' });
@@ -238,6 +241,103 @@ describe('portal do cliente', () => {
     await assertFails(setDoc(doc(como('donoB'), 'portalCliente/A_w1'), painel));
     await assertFails(updateDoc(doc(como('dono'), 'portalCliente/A_w1'), { orgId: 'B' }));
     await assertFails(setDoc(doc(como('dono'), 'portalCliente/A_w2'), { ...painel, workId: 'w2', emails: Array.from({ length: 11 }, (_, i) => `c${i}@x.com`) }));
+  });
+});
+
+describe('funções do ObraTop 3: Gestor, Financeiro e Consulta', () => {
+  it('Gestor cria e altera em qualquer obra, cria obras e fornecedores, mas não exclui', async () => {
+    const db = como('gestor');
+    await assertSucceeds(setDoc(doc(db, `${O}/activities/g1`), { workId: 'w2', name: 'Nova', progress: 10, deleted: false }));
+    await assertSucceeds(updateDoc(doc(db, `${O}/finance/f1`), { value: 99 }));
+    await assertSucceeds(setDoc(doc(db, `${O}/works/w9`), { name: 'Obra do gestor', deleted: false }));
+    await assertSucceeds(setDoc(doc(db, `${O}/suppliers/s9`), { name: 'Forn G', deleted: false }));
+    await assertSucceeds(setDoc(doc(db, `${O}/dailyLogs/dg`), { workId: 'w1', date: '2026-11-01', laborCount: 3, deleted: false, photos: [{ url: 'https://x/f.jpg' }] }));
+    await assertFails(updateDoc(doc(db, `${O}/finance/f1`), { deleted: true }));
+    await assertFails(deleteDoc(doc(db, `${O}/finance/f1`)));
+    await assertFails(setDoc(doc(db, `${O}/activities/g2`), { workId: 'w1', progress: 150, deleted: false }));
+    await assertFails(setDoc(doc(db, `${O}/activities/g3`), { workId: 'obra-inexistente', deleted: false }));
+    await assertFails(setDoc(doc(db, `${O}/members/gestor`), { role: 'owner', status: 'active' }));
+    await assertFails(setDoc(doc(db, `${O}/perfis/gestor`), { perfil: 'coordenador' }));
+  });
+  it('Gestor sem perfil próprio atua como coordenador nos projetos', async () => {
+    await assertSucceeds(updateDoc(doc(como('gestor'), `${O}/projects/p1`), { status: 'anteprojeto' }));
+    await assertFails(updateDoc(doc(como('consulta'), `${O}/projects/p1`), { status: 'anteprojeto' }));
+  });
+  it('Financeiro altera financeiro, medições, contratos, compras e orçamentos — e mais nada', async () => {
+    const db = como('financeiro');
+    await assertSucceeds(setDoc(doc(db, `${O}/finance/fx`), { workId: 'w2', value: 10, type: 'Receita', deleted: false }));
+    await assertSucceeds(setDoc(doc(db, `${O}/measurements/mx`), { workId: 'w2', value: 10, physical: 5, deleted: false }));
+    await assertSucceeds(setDoc(doc(db, `${O}/budgets/bx`), { workId: 'w2', qty: 1, unitValue: 2, bdi: 25, deleted: false }));
+    await assertFails(setDoc(doc(db, `${O}/activities/ax`), { workId: 'w2', progress: 10, deleted: false }));
+    await assertFails(setDoc(doc(db, `${O}/works/wx`), { name: 'X', deleted: false }));
+    await assertFails(setDoc(doc(db, `${O}/staff/sx`), { name: 'X', salary: 1, deleted: false }));
+    await assertFails(deleteDoc(doc(db, `${O}/finance/f1`)));
+    await assertSucceeds(setDoc(doc(db, `${O}/cotacoes/cx`), { itens: [] })); // orçamentista nos módulos novos
+  });
+  it('Consulta lê tudo e não grava nada', async () => {
+    const db = como('consulta');
+    await assertSucceeds(getDoc(doc(db, `${O}/finance/f1`)));
+    await assertSucceeds(getDocs(collection(db, `${O}/works`)));
+    await assertFails(updateDoc(doc(db, `${O}/finance/f1`), { value: 1 }));
+    await assertFails(setDoc(doc(db, `${O}/dailyLogs/dc`), { workId: 'w1', deleted: false }));
+    await assertFails(setDoc(doc(db, `${O}/projects/p1/timesheets/tc`), { orgId: 'A', uid: 'consulta', minutos: 10 }));
+    await assertFails(addDoc(collection(db, `${O}/projects/p1/redlines`), { autorUid: 'consulta', pontos: [] }));
+    await assertSucceeds(addDoc(collection(como('proj'), `${O}/projects/p1/redlines`), { autorUid: 'proj', pontos: [] }));
+  });
+  it('convite com função: só o administrador emite; a pessoa entra com a função do convite', async () => {
+    const validade = Timestamp.fromDate(new Date(Date.now() + 86400000));
+    const conv = { orgId: 'A', email: 'g@x.com', role: 'manager', workId: '', expiresAt: validade };
+    await assertFails(setDoc(doc(como('gestor'), 'invites/codGestor1'), conv));
+    await assertFails(setDoc(doc(como('dono'), 'invites/codGestor2'), { ...conv, role: 'owner' }));
+    await assertFails(setDoc(doc(como('dono'), 'invites/codConsul1'), { ...conv, role: 'viewer', workId: 'w1' })); // Consulta não leva obra
+    await assertSucceeds(setDoc(doc(como('dono'), 'invites/codGestor3'), conv));
+    const membro = { role: 'manager', status: 'active', workId: '', inviteCode: 'codGestor3', email: 'g@x.com' };
+    await assertFails(setDoc(doc(como('g', 'g@x.com'), `${O}/members/g`), { ...membro, role: 'finance' }));
+    await assertFails(setDoc(doc(como('intruso', 'i@x.com'), `${O}/members/intruso`), membro));
+    await assertSucceeds(setDoc(doc(como('g', 'g@x.com'), `${O}/members/g`), membro));
+  });
+  it('administrador muda a função, bloqueia e desbloqueia; ninguém mais', async () => {
+    await assertSucceeds(updateDoc(doc(como('dono'), `${O}/members/proj`), { role: 'manager', workId: '' }));
+    await assertSucceeds(updateDoc(doc(como('dono'), `${O}/members/financeiro`), { status: 'blocked' }));
+    await assertFails(getDoc(doc(como('financeiro'), `${O}/finance/f1`)));
+    await assertSucceeds(updateDoc(doc(como('dono'), `${O}/members/financeiro`), { status: 'active' }));
+    await assertSucceeds(getDoc(doc(como('financeiro'), `${O}/finance/f1`)));
+    await assertFails(updateDoc(doc(como('dono'), `${O}/members/consulta`), { role: 'viewer', workId: 'w1' }));
+    await assertFails(updateDoc(doc(como('dono'), `${O}/members/dono`), { status: 'blocked' }));
+    await assertFails(updateDoc(doc(como('gestor'), `${O}/members/consulta`), { role: 'manager' }));
+    await assertFails(updateDoc(doc(como('dono'), `${O}/members/consulta`), { role: 'owner', workId: '' }));
+  });
+  it('trilha de auditoria: cada um registra só em seu nome; só o administrador lê', async () => {
+    await assertSucceeds(addDoc(collection(como('proj'), `${O}/audits`), { action: 'update', userId: 'proj' }));
+    await assertFails(addDoc(collection(como('proj'), `${O}/audits`), { action: 'update', userId: 'dono' }));
+    await assertFails(getDocs(collection(como('gestor'), `${O}/audits`)));
+  });
+});
+
+describe('relatório fotográfico do portal', () => {
+  const verificado = (uid: string, email: string) => env.authenticatedContext(uid, { email, email_verified: true }).firestore();
+  const mes = { versao: 1, orgId: 'A', workId: 'w1', mes: '2026-11', rotulo: 'novembro de 2026', dias: [{ data: '2026-11-03', fotos: [{ url: 'https://x/f.jpg' }] }] };
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'portalCliente/A_w1'), { orgId: 'A', workId: 'w1', emails: ['cliente@x.com'] });
+      await setDoc(doc(db, 'portalCliente/A_w1/fotos/2026-11'), mes);
+    });
+  });
+  it('cliente do painel lê o mês; outros não; só o administrador grava', async () => {
+    await assertSucceeds(getDoc(doc(verificado('cli', 'cliente@x.com'), 'portalCliente/A_w1/fotos/2026-11')));
+    await assertFails(getDoc(doc(verificado('o', 'outro@x.com'), 'portalCliente/A_w1/fotos/2026-11')));
+    await assertFails(getDoc(doc(como('cli', 'cliente@x.com'), 'portalCliente/A_w1/fotos/2026-11'))); // e-mail não confirmado
+    await assertFails(setDoc(doc(verificado('cli', 'cliente@x.com'), 'portalCliente/A_w1/fotos/2026-12'), { ...mes, mes: '2026-12' }));
+    await assertFails(setDoc(doc(como('gestor'), 'portalCliente/A_w1/fotos/2026-12'), { ...mes, mes: '2026-12' }));
+    await assertFails(setDoc(doc(como('dono'), 'portalCliente/A_w1/fotos/2026-12'), mes)); // mês do documento ≠ id
+    await assertFails(setDoc(doc(como('donoB'), 'portalCliente/A_w1/fotos/2026-12'), { ...mes, mes: '2026-12' }));
+    await assertSucceeds(setDoc(doc(como('dono'), 'portalCliente/A_w1/fotos/2026-12'), { ...mes, mes: '2026-12' }));
+    await assertSucceeds(deleteDoc(doc(como('dono'), 'portalCliente/A_w1/fotos/2026-12')));
+  });
+  it('encerrado o painel, o cliente perde as fotos também', async () => {
+    await env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), 'portalCliente/A_w1')));
+    await assertFails(getDoc(doc(verificado('cli', 'cliente@x.com'), 'portalCliente/A_w1/fotos/2026-11')));
   });
 });
 

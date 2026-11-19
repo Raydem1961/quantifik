@@ -7,8 +7,14 @@ import { contractBalance, measurementNet, schedulePerformance, weightedProgress 
 
 export type Reg = { id: string; deleted?: unknown } & Record<string, unknown>;
 export interface DadosObra { works: Reg[]; activities: Reg[]; budgets: Reg[]; measurements: Reg[]; finance: Reg[]; contracts: Reg[]; documents: Reg[]; dailyLogs: Reg[] }
-export interface OpcoesPortal { diario: boolean; documentos: boolean }
-export const OPCOES_PADRAO: OpcoesPortal = { diario: true, documentos: false };
+export interface OpcoesPortal { diario: boolean; documentos: boolean; /** Relatório fotográfico (padrão: ligado). */ fotos?: boolean }
+export const OPCOES_PADRAO: OpcoesPortal = { diario: true, documentos: false, fotos: true };
+
+export interface FotoPortal { url: string; thumb: string; legenda: string; servico: string }
+export interface DiaPortal { data: string; clima: string; servicos: string; fotos: FotoPortal[] }
+/** Um mês do relatório fotográfico: documento separado (portalCliente/{id}/fotos/{AAAA-MM}). */
+export interface MesFotos { versao: 1; orgId: string; workId: string; mes: string; rotulo: string; dias: DiaPortal[] }
+export interface IndiceMes { mes: string; rotulo: string; dias: number; fotos: number; hash: string }
 
 export interface PontoCurva { mes: string; rotulo: string; fisicoPrevisto: number; fisicoRealizado: number | null; financeiroPrevisto: number; financeiroRealizado: number | null }
 export interface Etapa { eap: string; nome: string; inicio: string; fim: string; avanco: number; situacao: 'concluida' | 'em_andamento' | 'atrasada' | 'a_iniciar' }
@@ -27,6 +33,8 @@ export interface Portal {
   };
   curva: PontoCurva[]; etapas: Etapa[]; medicoes: MedicaoPortal[]; parcelas: Parcela[];
   diario: { data: string; clima: string; servicos: string }[]; documentos: { nome: string; categoria: string; data: string; url: string }[];
+  /** Índice do relatório fotográfico (os meses ficam em documentos próprios). */
+  fotosMeses: IndiceMes[];
 }
 
 const n = (v: unknown) => Number(v) || 0;
@@ -38,6 +46,36 @@ const dias = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) 
 const somaDias = (iso: string, q: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + q * 86400000).toISOString().slice(0, 10);
 const fimDoMes = (ano: number, mes: number) => new Date(Date.UTC(ano, mes + 1, 0)).toISOString().slice(0, 10);
 export const idPortal = (orgId: string, workId: string) => `${orgId}_${workId}`;
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+export const rotuloMes = (mes: string) => `${MESES[Number(mes.slice(5, 7)) - 1] ?? ''} de ${mes.slice(0, 4)}`;
+/** Impressão digital curta do conteúdo (para regravar só os meses que mudaram). */
+export function resumo(texto: string): string {
+  let h = 5381;
+  for (let i = 0; i < texto.length; i++) h = ((h << 5) + h + texto.charCodeAt(i)) | 0;
+  return `${(h >>> 0).toString(36)}-${texto.length.toString(36)}`;
+}
+
+/**
+ * Relatório fotográfico do cliente: fotos dos diários ASSINADOS da obra, sem as marcadas como
+ * "uso interno", agrupadas por dia e por mês (mais recente primeiro). Só endereços https (ou o
+ * armazenamento local de testes) — nada de javascript: nem data: vindos de registros adulterados.
+ */
+export function montarFotos(orgId: string, workId: string, dd: Pick<DadosObra, 'dailyLogs' | 'activities'>): MesFotos[] {
+  const nomes = new Map(dd.activities.filter((a) => a.workId === workId && !a.deleted).map((a) => [a.id, [s(a.wbs), s(a.name)].filter(Boolean).join(' ')]));
+  const dias: DiaPortal[] = dd.dailyLogs
+    .filter((x) => !x.deleted && x.workId === workId && x.status === 'Assinado' && /^\d{4}-\d{2}-\d{2}/.test(d10(x.date)) && Array.isArray(x.photos))
+    .map((x) => ({
+      data: d10(x.date), clima: s(x.weather), servicos: s(x.services).slice(0, 300),
+      fotos: (x.photos as Record<string, unknown>[]).filter((f) => f && !f.privada && /^(https:|blob:|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(s(f.url)))
+        .slice(0, 60).map((f) => ({ url: s(f.url), thumb: s(f.thumb) || s(f.url), legenda: s(f.legenda).slice(0, 240), servico: nomes.get(s(f.activityId)) ?? '' })),
+    }))
+    .filter((d) => d.fotos.length > 0)
+    .sort((a, b) => b.data.localeCompare(a.data));
+  const porMes = new Map<string, DiaPortal[]>();
+  for (const d of dias) { const m = d.data.slice(0, 7); porMes.set(m, [...(porMes.get(m) ?? []), d]); }
+  return [...porMes.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([mes, ds]) => ({ versao: 1 as const, orgId, workId, mes, rotulo: rotuloMes(mes), dias: ds }));
+}
+export const indiceDeFotos = (meses: MesFotos[]): IndiceMes[] => meses.map((m) => ({ mes: m.mes, rotulo: m.rotulo, dias: m.dias.length, fotos: m.dias.reduce((t, d) => t + d.fotos.length, 0), hash: resumo(JSON.stringify(m.dias)) }));
 export const normalizarEmails = (texto: string): string[] => [...new Set(texto.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^\S+@\S+\.\S+$/.test(e)))].slice(0, 10);
 
 export function montarPortal(orgId: string, workId: string, dd: DadosObra, empresa: Portal['empresa'], emails: string[], opcoes: OpcoesPortal, hoje: string, agora = new Date().toISOString()): Portal {
@@ -114,6 +152,7 @@ export function montarPortal(orgId: string, workId: string, dd: DadosObra, empre
     },
     curva, etapas, medicoes, parcelas,
     diario: opcoes.diario ? vivos(dd.dailyLogs).filter((x) => x.status === 'Assinado').sort((a, b) => d10(b.date).localeCompare(d10(a.date))).slice(0, 12).map((x) => ({ data: d10(x.date), clima: s(x.weather), servicos: s(x.services).slice(0, 300) })) : [],
+    fotosMeses: opcoes.fotos === false ? [] : indiceDeFotos(montarFotos(orgId, workId, dd)),
     documentos: opcoes.documentos ? vivos(dd.documents).filter((x) => x.status === 'Aprovado' && /^https:\/\//.test(s(x.fileUrl) || s(x.reference))).slice(0, 40).map((x) => ({ nome: s(x.name).slice(0, 120), categoria: s(x.category), data: d10(x.date), url: s(x.fileUrl) || s(x.reference) })) : [],
   };
 }
