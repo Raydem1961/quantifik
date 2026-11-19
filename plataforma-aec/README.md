@@ -87,6 +87,13 @@ Para refazer depois de mudar telas: compile em modo demonstração, sirva `out/`
 `node manual/capturar-telas.cjs <pasta>` (crie `<pasta>/img` antes), `node manual/capturar-login.cjs <pasta>`
 e `node manual/gerar-manual.cjs <pasta>/img public/manual-obratop.pdf`.
 
+## Origem do código e licenças
+
+`ORIGEM-DO-CODIGO.md` lista, arquivo por arquivo, o que veio do ObraTop 3, o que veio do Quantifik e
+o que é próprio do ObraTop 4 (verificado pelo teste `tests/origem.test.ts`). Criar empresa exige um
+código de licença emitido em Administrativo → Licenças da plataforma (administrador definido pelo
+instalador).
+
 ## Desenvolvimento
 
 ```bash
@@ -141,8 +148,10 @@ modelo (`src/lib/import/modelo.ts`), gravada em `projects/{id}/quantities/{arqui
 Formatos nativos binários (`.rvt`, `.pln`, `.nwd`, `.dwg`, `.xlsx`) não são lidos: a tela informa
 qual exportação fazer em cada caso.
 
-**Preços.** As bases vêm do catálogo público `obratop-bases` (SINAPI, SICRO 3 e ORSE por UF, mês e
-regime), configurável em `NEXT_PUBLIC_BASES_CATALOG_URL`.
+**Preços.** As bases (SINAPI, SICRO 3 e ORSE por UF e regime, mês mais recente, e o SINAPI-BA
+analítico) ficam em `public/bases/` e são servidas pelo próprio aplicativo — ele não depende de outro
+repositório. `npm run bases:atualizar` copia o mês novo dos robôs mensais (obratop-bases e Quantifik);
+o instalador faz isso antes de compilar. `NEXT_PUBLIC_BASES_CATALOG_URL` ainda permite usar outro catálogo.
 
 **Vínculos.** Cada item é ligado a uma composição por um vínculo, resolvido nesta ordem: vínculo já
 confirmado pelo escritório → código que veio na planilha → sugestão por semelhança de texto. Sugestões

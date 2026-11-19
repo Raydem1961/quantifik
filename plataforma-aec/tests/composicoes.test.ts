@@ -4,7 +4,7 @@
  * sobre as mesmas composições e exige o mesmo resultado, centavo a centavo. Se o arquivo do
  * Quantifik não estiver ao lado do projeto, essa parte é pulada.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import vm from 'node:vm';
 import path from 'node:path';
@@ -201,11 +201,29 @@ describe.skipIf(!temOriginal)('paridade com o Quantifik publicado', () => {
     console.log(`paridade: ${comparadas} composições × 2 modos, ${linhas} linhas de insumo idênticas`);
   }, 120000);
 
+});
+
+describe('bases de preços servidas pelo próprio ObraTop 4', () => {
+  it('SINAPI-BA copiado do Quantifik decodifica com as composições do mês', () => {
+    const f = path.resolve(__dirname, '../public/bases/sinapi-ba.json.gz');
+    const b = decodificarSinapi(JSON.parse(gunzipSync(readFileSync(f)).toString()));
+    expect(b.comps.length).toBeGreaterThan(5000);
+    expect(b.comps.some((c) => c.itens.length > 0)).toBe(true);
+  });
+  it('catálogo próprio aponta só para arquivos que existem em public/bases', () => {
+    const raiz = path.resolve(__dirname, '../public/bases');
+    const cat = JSON.parse(readFileSync(`${raiz}/catalog.json`, 'utf8')) as { bases: { file: string; status: string }[] };
+    expect(cat.bases.length).toBeGreaterThan(20);
+    for (const b of cat.bases) expect(existsSync(`${raiz}/${b.file}`), b.file).toBe(true);
+  });
   it('ORSE real: a soma coeficiente × preço reproduz o preço publicado', () => {
-    const dir = path.resolve(__dirname, '../../../obratop-bases/docs/bases');
-    if (!existsSync(`${dir}/ORSE-SE-2026-08.json.gz`)) return;
+    // Bases do próprio ObraTop 4 (public/bases, copiadas por `npm run bases:atualizar`).
+    const dir = path.resolve(__dirname, '../public/bases/bases');
+    const principal = existsSync(dir) ? readdirSync(dir).filter((f) => /^ORSE-SE-\d{4}-\d{2}\.json\.gz$/.test(f)).sort().pop() : undefined;
+    expect(principal, 'public/bases deve conter a base ORSE-SE').toBeTruthy();
     const ler = (f: string) => JSON.parse(gunzipSync(readFileSync(`${dir}/${f}`)).toString());
-    const b = montarOrse(ler('ORSE-SE-2026-08.json.gz').rows, ler('ORSE-SE-2026-08.analitico.json.gz'), { reference: '2026-08' });
+    const ref = principal!.slice(8, 15);
+    const b = montarOrse(ler(principal!).rows, ler(principal!.replace('.json.gz', '.analitico.json.gz')), { reference: ref });
     let ok = 0, n = 0;
     for (const c of b.comps) {
       if (!(c.cs > 0)) continue;

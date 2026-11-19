@@ -1,7 +1,7 @@
 /**
  * Carrega as bases oficiais de preços (SINAPI, SICRO, ORSE) publicadas como JSON compactado
- * com um catálogo (`catalog.json`). Os arquivos são públicos; nenhuma informação do projeto
- * ou do usuário é enviada — é apenas um download.
+ * com um catálogo (`catalog.json`). As bases são servidas pelo próprio ObraTop 4 (public/bases,
+ * atualizadas com `npm run bases:atualizar`): o aplicativo não depende de outro repositório.
  */
 import type { BasePrecos } from './analitico';
 
@@ -17,11 +17,12 @@ export interface EntradaCatalogo {
   url?: string;
 }
 
-export const CATALOGO_PADRAO =
-  process.env.NEXT_PUBLIC_BASES_CATALOG_URL ?? 'https://raw.githubusercontent.com/Raydem1961/obratop-bases/main/docs/catalog.json';
+export const CATALOGO_PADRAO = process.env.NEXT_PUBLIC_BASES_CATALOG_URL ?? '/bases/catalog.json';
+/** Endereço absoluto (os padrões são relativos ao próprio site). */
+export const absoluta = (url: string) => new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost/').toString();
 
 export async function carregarCatalogo(url = CATALOGO_PADRAO): Promise<EntradaCatalogo[]> {
-  const r = await fetch(url, { cache: 'no-cache' });
+  const r = await fetch(absoluta(url), { cache: 'no-cache' });
   if (!r.ok) throw new Error(`Catálogo de bases indisponível (HTTP ${r.status}).`);
   const json = (await r.json()) as { bases?: EntradaCatalogo[] };
   // Só bases validadas, e sem as variantes analíticas (composição aberta), que têm outro formato.
@@ -46,7 +47,7 @@ export function carregarBase(entrada: EntradaCatalogo, urlCatalogo = CATALOGO_PA
   if (existente) return existente;
   const promessa = (async () => {
     // O caminho relativo ao catálogo tem prioridade: permite espelhar as bases em outro host.
-    const url = new URL(entrada.file, urlCatalogo).toString();
+    const url = new URL(entrada.file, absoluta(urlCatalogo)).toString();
     const r = await fetch(url);
     if (!r.ok || !r.body) throw new Error(`Base ${entrada.id} indisponível (HTTP ${r.status}).`);
     // O servidor entrega o .gz como binário, sem Content-Encoding: descompacta aqui.

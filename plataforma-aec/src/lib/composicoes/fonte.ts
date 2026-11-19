@@ -1,15 +1,15 @@
 /**
  * Fontes das composições analíticas.
  *
- *  • SINAPI-BA: os dados que o robô do Quantifik regrava todo mês dentro do `index.html`
- *    (bloco <script id="embedded-data">). A plataforma lê o mesmo arquivo, então acompanha o
- *    mês sem nenhuma etapa extra.
- *  • ORSE-SE: a base analítica publicada no catálogo `obratop-bases`.
+ *  • SINAPI-BA: os dados do robô mensal do Quantifik, copiados para public/bases/sinapi-ba.json.gz
+ *    por `npm run bases:atualizar` (aceita também o index.html do Quantifik, bloco "embedded-data").
+ *  • ORSE-SE: a base analítica do catálogo, também copiada para public/bases.
+ * Tudo é servido pelo próprio ObraTop 4: nenhum outro repositório precisa estar no ar.
  */
 import type { BaseComposicoes, Composicao, ItemComposicao, Regime, TipoInsumo } from './motor';
 
-export const URL_QUANTIFIK =
-  process.env.NEXT_PUBLIC_QUANTIFIK_DATA_URL ?? 'https://raw.githubusercontent.com/Raydem1961/quantifik/main/index.html';
+export const URL_QUANTIFIK = process.env.NEXT_PUBLIC_QUANTIFIK_DATA_URL ?? '/bases/sinapi-ba.json.gz';
+const absoluta = (url: string) => new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost/').toString();
 
 /** Formato compacto gravado pelo robô: dicionário de insumos + composições por índice. */
 interface Embutido {
@@ -121,7 +121,8 @@ function memo(chave: string, fn: () => Promise<BaseComposicoes>): Promise<BaseCo
 
 export function carregarSinapi(url = URL_QUANTIFIK): Promise<BaseComposicoes> {
   return memo(`sinapi|${url}`, async () => {
-    const r = await fetch(url, { cache: 'no-cache' });
+    if (/\.json(\.gz)?$/.test(url)) return decodificarSinapi(await baixarJson<Embutido>(absoluta(url)));
+    const r = await fetch(absoluta(url), { cache: 'no-cache' });
     if (!r.ok) throw new Error(`Base SINAPI indisponível (HTTP ${r.status}).`);
     return decodificarSinapi(extrairEmbutido(await r.text()));
   });
@@ -137,6 +138,7 @@ async function baixarJson<T>(url: string): Promise<T> {
 /** Carrega o ORSE a partir do catálogo de bases: usa o mês mais recente que tenha a variante analítica. */
 export function carregarOrse(urlCatalogo: string): Promise<BaseComposicoes> {
   return memo(`orse|${urlCatalogo}`, async () => {
+    urlCatalogo = absoluta(urlCatalogo);
     const rc = await fetch(urlCatalogo, { cache: 'no-cache' });
     if (!rc.ok) throw new Error(`Catálogo de bases indisponível (HTTP ${rc.status}).`);
     const cat = (await rc.json()) as { bases?: { id: string; source: string; reference: string; file: string; status: string }[] };

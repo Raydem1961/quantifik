@@ -221,6 +221,9 @@ async function principal() {
   if (!apps.length) throw new Error('Não foi possível obter o aplicativo Web do projeto Firebase.');
   const sdk = json(firebase(['apps:sdkconfig', 'WEB', apps[0].appId, '--project', projectId, '--json'], { capturar: true }))?.result;
   writeFileSync(join(raiz, '.env.local'), envLocal(sdk?.sdkConfig ?? sdk));
+  // Bases de preços do mês: o aplicativo as serve do próprio endereço. Sem internet, publica a cópia que já está na pasta.
+  if (rodar('node', ['scripts/atualizar-bases.mjs'], { tolerar: true, capturar: true }).status === 0) ok('Bases de preços atualizadas (SINAPI, SICRO, ORSE).');
+  else aviso('Não consegui baixar as bases de preços do mês; será publicada a cópia que já está no instalador.');
   rodar('npm', ['run', 'build']);
   ok('Aplicativo compilado');
 

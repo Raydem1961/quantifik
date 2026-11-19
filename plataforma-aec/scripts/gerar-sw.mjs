@@ -27,7 +27,7 @@ const VERSAO = '${versao}';
 const CACHE_APP = 'aec-app-' + VERSAO;
 const CACHE_DADOS = 'aec-dados-v1';
 const ARQUIVOS = ${JSON.stringify(urls)};
-// Bases de preços e composições: arquivos públicos, grandes e que mudam uma vez por mês.
+// Bases de preços e composições (em /bases/ do próprio site): arquivos públicos, grandes e que mudam uma vez por mês.
 const HOSTS_DE_DADOS = ['raw.githubusercontent.com', 'raydem1961.github.io'];
 
 self.addEventListener('install', (e) => {
@@ -41,7 +41,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (HOSTS_DE_DADOS.includes(url.hostname)) {
+  if (HOSTS_DE_DADOS.includes(url.hostname) || (url.origin === self.location.origin && url.pathname.startsWith('/bases/'))) {
     // Responde do cache na hora e atualiza em segundo plano; sem rede, fica com o que tem.
     e.respondWith(caches.open(CACHE_DADOS).then(async (c) => {
       const guardado = await c.match(req, { ignoreVary: true });

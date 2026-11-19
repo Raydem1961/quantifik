@@ -23,6 +23,7 @@
     "test:instalador": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/instalador.e2e.mjs\"",
     "test:e2e:integracoes": "node tests/e2e/integracoes.e2e.cjs",
     "regras:gerar": "node scripts/gerar-regras.mjs",
+    "bases:atualizar": "node scripts/atualizar-bases.mjs",
     "test:e2e:portal": "node tests/e2e/portal.e2e.cjs",
     "test:e2e:auditoria": "node tests/e2e/auditoria.e2e.cjs",
     "test:e2e:controle": "node tests/e2e/controle.e2e.cjs",
