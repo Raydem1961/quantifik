@@ -14,7 +14,7 @@ fs.writeFileSync(path.join(D, 'extrato.ofx'), OFX); fs.writeFileSync(path.join(D
   const b = await chromium.launch(); const erros = [];
   const ctx = await b.newContext({ viewport: { width: 1360, height: 850 }, deviceScaleFactor: 1.5 });
   await ctx.addInitScript(() => localStorage.setItem('theme', 'light'));
-  const p = await ctx.newPage(); p.on('pageerror', (e) => erros.push(e.message));
+  const p = await ctx.newPage(); p.on('pageerror', (e) => erros.push(e.message)); p.on('dialog', (d) => d.accept());
   const foto = async (n, o = {}) => {
     await p.waitForTimeout(o.espera ?? 700);
     // Página inteira sem o artefato do cabeçalho fixo: aumenta a janela até a altura do conteúdo (no máximo `max`).
@@ -62,6 +62,28 @@ fs.writeFileSync(path.join(D, 'extrato.ofx'), OFX); fs.writeFileSync(path.join(D
     await p.screenshot({ path: path.join(D, 'img', '41-portal-detalhe.jpg'), type: 'jpeg', quality: 80, clip: { x: cx.x - 12, y: cx.y + 868, width: cx.width + 24, height: Math.min(cx.height - 856, 900) } });
     await p.setViewportSize({ width: 1360, height: 850 });
   });
+  await ir('gestao/dailyLogs', 1500);
+  await tenta('diario-form', async () => { await p.getByRole('button', { name: /^Editar / }).first().click(); await p.waitForTimeout(800); await foto('42-diario-form', { inteira: true, max: 1400 }); await p.getByRole('button', { name: 'Cancelar' }).click(); });
+  await tenta('relatorio', async () => { await p.getByRole('tab', { name: 'Relatório fotográfico' }).click(); await foto('43-relatorio-fotos', { inteira: true, max: 1500, espera: 1200 }); });
+  await ir('gestao/works', 1200);
+  await tenta('assistente', async () => { await p.getByRole('button', { name: 'Nova obra por modelo' }).click(); await p.getByLabel('Nome da obra *').fill('Escola Municipal Modelo'); await p.getByLabel('Cliente *').fill('Prefeitura Municipal'); await foto('45-assistente', { inteira: true, max: 1100 }); });
+  await ir('economia', 1500); await foto('46-economia', { inteira: true, max: 1500 });
+  await ir('gestao/quality', 1200);
+  await tenta('lixeira', async () => { await p.getByRole('button', { name: /^Excluir Falha/ }).first().click(); await p.waitForTimeout(500); });
+  await ir('admin/seguranca', 1200); await foto('47-seguranca', { inteira: true, max: 1000 });
+  await ir('admin/backup', 1000); await foto('48-backup', { inteira: true, max: 900 });
+  await ir('clientes', 1500);
+  await tenta('portal-fotos', async () => {
+    await p.getByLabel(/E-mail\(s\) do cliente de Residencial/).fill('cliente@exemplo.com');
+    await p.getByRole('button', { name: 'Liberar portal' }).nth(1).click(); await p.waitForTimeout(600);
+    await p.getByRole('button', { name: 'Ver como o cliente' }).nth(1).click(); await p.waitForTimeout(1200);
+    await p.setViewportSize({ width: 1360, height: 3400 }); await p.waitForTimeout(800);
+    const sec = p.getByRole('heading', { name: 'Relatório fotográfico' }).locator('xpath=ancestor::section[1]');
+    await sec.screenshot({ path: path.join(D, 'img', '50-portal-fotos.jpg'), type: 'jpeg', quality: 80 });
+    await p.setViewportSize({ width: 1360, height: 850 });
+  });
+  await ir('composicoes', 6000);
+  await tenta('parametros', async () => { await p.getByRole('tab', { name: 'Parâmetros' }).click(); await p.getByRole('button', { name: 'Colar tabela' }).click(); await foto('51-precos', { inteira: true, max: 1100 }); });
   await ctx.addInitScript(() => localStorage.setItem('theme', 'dark')); await ir('inicio'); await foto('36-escuro');
   const cel = await b.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 2 }); await cel.addInitScript(() => localStorage.setItem('theme', 'light'));
   const pc = await cel.newPage(); await pc.goto(`${A}/inicio/`, { waitUntil: 'load' }); await pc.waitForTimeout(900); await pc.screenshot({ path: path.join(D, 'img', '37-celular.jpg'), type: 'jpeg', quality: 80 });

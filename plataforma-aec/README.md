@@ -57,6 +57,19 @@ O mapa das áreas fica em `src/lib/modulos.ts`; os indicadores, em `src/lib/indi
   auditoria imutável, notificações com webhook assinado (HMAC), assinatura digital (Clicksign),
   alertas diários de ART/RRT. Exigem o plano Blaze.
 
+## Recursos do ObraTop 3 trazidos na auditoria (4.1)
+
+- **Funções** Administrador, Gestor, Financeiro, Engenheiro da obra e Consulta (`src/lib/obratop/permissoes.ts`,
+  regras em `regras/extensao-*.rules`), bloqueio de usuário, salários só para Administrador/Financeiro.
+- **Diário de obra com fotos** (`src/lib/fotos.ts`, `src/components/fotos/fotos.tsx`): compressão no aparelho,
+  `organizations/{org}/diario/{obra}/{diário}/` no Storage, relatório fotográfico imprimível; no portal,
+  `portalCliente/{id}/fotos/{AAAA-MM}` (só diários assinados, sem fotos internas).
+- **Ligações**: diário → cronograma, medição/pedido → financeiro, pedido → estoque, reposição (`src/lib/obratop/fluxos.ts`).
+- **Assistente de nova obra** (modelos `vendor/templates.mjs`), **análise econômica** (`vendor/economics.mjs`),
+  **histórico diário de avanço** (`progressSnapshots`), **auditoria** (`audits`) e **lixeira**,
+  **backup/restauração** com SHA-256 (`src/lib/backup.ts`), logotipo e contatos nos campos do ObraTop 3.
+- Relatório da auditoria: `node manual/gerar-relatorio-auditoria.cjs saida.pdf`.
+
 ## Integrações (Fiscal e Integrações)
 
 | Tela | O que funciona hoje | O que depende da empresa |
@@ -86,9 +99,9 @@ npm run build          # exportação estática em out/ + service worker
 
 ```bash
 npm run typecheck && npm run lint
-npm test                  # 89 testes de unidade (motores de cálculo, importadores, integrações, instalador)
+npm test                  # 97 testes de unidade (motores de cálculo, importadores, integrações, instalador)
 npm run test:obratop      # testes originais dos módulos de cálculo do ObraTop (34)
-npm run test:rules        # 23 testes das regras de segurança no emulador
+npm run test:rules        # 32 testes das regras de segurança no emulador
 npm run test:instalador   # reconhecimento do ObraTop existente (4)
 
 # ponta a ponta, com o Firebase Emulator Suite
@@ -102,6 +115,7 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-aec.appspot.com NEXT_PUBLIC_USE_EMULATO
 npx serve out -l 4173 &
 npm run test:e2e:ui           # 73: todas as áreas, convite → conta → empresa, papéis
 npm run test:e2e:integracoes  # 21: OFX, Pix, NF-e, CNPJ (resposta simulada), eSocial
+npm run test:e2e:auditoria    # 36: fotos do diário → relatório fotográfico → portal, ligações entre módulos, assistente, lixeira, auditoria, backup, funções, análise econômica
 npm run test:e2e:portal       # 20: liberar portal, cliente confirma e-mail, vê só o contrato, atualização, fim do acesso
 npm run test:e2e:offline      # 5: lançar sem internet e sincronizar
 ```

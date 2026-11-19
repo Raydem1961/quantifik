@@ -66,7 +66,7 @@ export function montarFotos(orgId: string, workId: string, dd: Pick<DadosObra, '
     .filter((x) => !x.deleted && x.workId === workId && x.status === 'Assinado' && /^\d{4}-\d{2}-\d{2}/.test(d10(x.date)) && Array.isArray(x.photos))
     .map((x) => ({
       data: d10(x.date), clima: s(x.weather), servicos: s(x.services).slice(0, 300),
-      fotos: (x.photos as Record<string, unknown>[]).filter((f) => f && !f.privada && /^(https:|blob:|http:\/\/(localhost|127\.0\.0\.1)[:/])/.test(s(f.url)))
+      fotos: (x.photos as Record<string, unknown>[]).filter((f) => f && !f.privada && /^(https:|blob:|http:\/\/(localhost|127\.0\.0\.1)[:/]|\/demo-fotos\/)/.test(s(f.url)))
         .slice(0, 60).map((f) => ({ url: s(f.url), thumb: s(f.thumb) || s(f.url), legenda: s(f.legenda).slice(0, 240), servico: nomes.get(s(f.activityId)) ?? '' })),
     }))
     .filter((d) => d.fotos.length > 0)

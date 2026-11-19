@@ -1,6 +1,6 @@
 {
   "name": "obratop",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -23,7 +23,8 @@
     "test:instalador": "firebase emulators:exec --only firestore,auth --project demo-aec \"node tests/e2e/instalador.e2e.mjs\"",
     "test:e2e:integracoes": "node tests/e2e/integracoes.e2e.cjs",
     "regras:gerar": "node scripts/gerar-regras.mjs",
-    "test:e2e:portal": "node tests/e2e/portal.e2e.cjs"
+    "test:e2e:portal": "node tests/e2e/portal.e2e.cjs",
+    "test:e2e:auditoria": "node tests/e2e/auditoria.e2e.cjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",
