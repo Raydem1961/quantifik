@@ -14,7 +14,7 @@ export default function Legal() {
       <Link href="/login/" className="flex items-center gap-2.5"><Simbolo className="h-9 w-9" /><Nome className="text-lg font-bold tracking-tight" /></Link>
       <h1 className="mt-8 text-3xl font-semibold tracking-tight">Termos de uso e política de privacidade</h1>
       <p className="mt-2 text-sm text-muted-foreground">Versão 1.0 · vigente desde 19/11/2026. <b className="text-foreground">Modelo a ser revisado pelo jurídico do fornecedor antes da comercialização</b>; os campos entre colchetes devem ser preenchidos com os dados do fornecedor.</p>
-      <nav aria-label="Seções" className="mt-6 flex flex-wrap gap-x-4 gap-y-1 text-sm"><a className="text-primary hover:underline" href="#termos">Termos de uso</a><a className="text-primary hover:underline" href="#privacidade">Privacidade (LGPD)</a><a className="text-primary hover:underline" href="#direitos">Seus direitos</a><a className="text-primary hover:underline" href="#contato">Contato</a></nav>
+      <nav aria-label="Seções" className="mt-6 flex flex-wrap gap-x-4 gap-y-1 text-sm"><a className="text-primary hover:underline" href="#termos">Termos de uso</a><a className="text-primary hover:underline" href="#privacidade">Privacidade (LGPD)</a><a className="text-primary hover:underline" href="#direitos">Seus direitos</a><a className="text-primary hover:underline" href="#contato">Contato</a><a className="text-primary hover:underline" href="#autorais">Direitos autorais</a></nav>
 
       <S id="termos" titulo="1. Termos de uso">
         <p>O ObraTop é um software de gestão de obras, projetos e orçamentos oferecido por <b>[razão social do fornecedor, CNPJ]</b> (“fornecedor”) a empresas de engenharia e construção (“empresa contratante”), que o disponibilizam aos seus colaboradores e, pelo Portal do Cliente, aos seus clientes.</p>
@@ -50,6 +50,14 @@ export default function Legal() {
         <p>Alterações destes termos serão comunicadas no aplicativo com antecedência razoável.</p>
       </S>
       <p className="mt-12 text-xs text-muted-foreground"><Link href="/login/" className="text-primary hover:underline">Voltar ao ObraTop</Link></p>
+      <S id="autorais" titulo="5. Direitos autorais e licença de uso">
+        <p><b>Criação e autoria declarada:</b> Eng. Civil Raydem Rabello Santana. <b>© 2026 Raydem Rabello Santana. Todos os direitos reservados.</b></p>
+        <p>O ObraTop é um programa de computador. Seu código-fonte e código-objeto, documentação, textos, elementos gráficos originais e demais expressões intelectuais protegíveis são protegidos pela legislação brasileira aplicável. A proteção autoral não abrange ideias, procedimentos, métodos de operação ou conceitos matemáticos considerados isoladamente.</p>
+        <p><b>Licença e uso autorizado.</b> O acesso ao sistema não transfere propriedade intelectual ao usuário. Salvo autorização prévia e expressa do titular ou hipótese permitida pela legislação, é vedado copiar, reproduzir, distribuir, comercializar, sublicenciar, ceder, disponibilizar a terceiros, publicar, modificar, adaptar ou explorar o ObraTop, no todo ou em parte, bem como remover ou adulterar avisos de autoria e direitos autorais.</p>
+        <p>Credenciais são pessoais. O usuário autorizado deve utilizar o sistema apenas dentro das permissões concedidas pelo administrador e não pode tentar contornar controles de acesso, obter código ou dados sem autorização ou utilizar cópias não autorizadas.</p>
+        <p><b>Base legal.</b> <a className="text-primary underline" href="https://www.planalto.gov.br/ccivil_03/leis/l9609.htm" target="_blank" rel="noopener noreferrer">Lei nº 9.609/1998 (Lei de Software)</a>: art. 2º (regime de proteção autoral do software) e art. 12 (sanções penais, sem prejuízo das medidas civis). <a className="text-primary underline" href="https://www.planalto.gov.br/ccivil_03/leis/l9610.htm" target="_blank" rel="noopener noreferrer">Lei nº 9.610/1998 (Lei de Direitos Autorais)</a>: aplica-se aos programas de computador no que couber.</p>
+        <p>O uso indevido poderá resultar em suspensão ou cancelamento do acesso e adoção das medidas administrativas, civis e/ou penais cabíveis. Este aviso não substitui instrumento contratual específico de licenciamento, quando existente.</p>
+      </S>
     </main>
   );
 }

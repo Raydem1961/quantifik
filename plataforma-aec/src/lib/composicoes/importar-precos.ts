@@ -21,33 +21,41 @@ export function linhasDeTexto(texto: string): string[][] {
   return linhas.map((l) => l.split(sep).map((c) => c.replace(/^"|"$/g, '').trim()));
 }
 
-/** Planilha .xlsx (primeira aba) em linhas de texto, sem bibliotecas pesadas. */
-export function linhasDeXlsx(dados: Uint8Array): string[][] {
+/** Todas as abas de uma planilha .xlsx, em linhas de texto, sem bibliotecas pesadas. */
+export function abasDeXlsx(dados: Uint8Array): { nome: string; linhas: string[][] }[] {
   let arquivos: Record<string, Uint8Array>;
   try { arquivos = unzipSync(dados); } catch { throw new Error('Arquivo Excel ilegível. Salve como .xlsx ou exporte em CSV.'); }
   const xml = (nome: string) => (arquivos[nome] ? strFromU8(arquivos[nome]!) : '');
   const desesc = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
-  const comp = [...xml('xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => desesc([...m[1]!.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')));
+  const textos = (s: string) => desesc([...s.matchAll(/<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map((t) => t[1]).join(''));
+  const comp = [...xml('xl/sharedStrings.xml').matchAll(/<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) => textos(m[1]!));
   const rels = xml('xl/_rels/workbook.xml.rels'), wb = xml('xl/workbook.xml');
-  const rid = /<sheet\b[^>]*r:id="([^"]+)"/.exec(wb)?.[1];
-  const alvo = rid ? new RegExp(`Id="${rid}"[^>]*Target="([^"]+)"|Target="([^"]+)"[^>]*Id="${rid}"`).exec(rels) : null;
-  const caminho = alvo ? `xl/${(alvo[1] ?? alvo[2])!.replace(/^\/?xl\//, '').replace(/^\//, '')}` : 'xl/worksheets/sheet1.xml';
-  const folha = xml(caminho) || xml('xl/worksheets/sheet1.xml');
-  if (!folha) throw new Error('A planilha não tem abas legíveis.');
+  const alvos = new Map([...rels.matchAll(/<(?:\w+:)?Relationship\b([^>]*)\/?>/g)].map((m) => [/Id="([^"]+)"/.exec(m[1]!)?.[1] ?? '', /Target="([^"]+)"/.exec(m[1]!)?.[1] ?? '']));
+  const folhas = [...wb.matchAll(/<(?:\w+:)?sheet\b([^>]*)\/?>/g)].map((m) => ({ nome: desesc(/name="([^"]*)"/.exec(m[1]!)?.[1] ?? ''), rid: /r:id="([^"]+)"/.exec(m[1]!)?.[1] ?? '' }));
   const col = (ref: string) => [...ref.replace(/\d+/g, '')].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
-  const linhas: string[][] = [];
-  for (const r of folha.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
-    const linha: string[] = [];
-    for (const c of r[1]!.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      const attrs = c[1]!, corpo = c[2] ?? '', ref = /r="([A-Z]+\d+)"/.exec(attrs)?.[1], tipo = /t="([^"]+)"/.exec(attrs)?.[1];
-      const v = /<v>([\s\S]*?)<\/v>/.exec(corpo)?.[1] ?? '';
-      const valor = tipo === 's' ? comp[Number(v)] ?? '' : tipo === 'inlineStr' ? desesc([...corpo.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')) : desesc(v);
-      linha[ref ? col(ref) : linha.length] = valor;
+  const ler = (caminho: string) => {
+    const folha = xml(caminho);
+    const linhas: string[][] = [];
+    for (const r of folha.matchAll(/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/g)) {
+      const linha: string[] = [];
+      for (const c of r[1]!.matchAll(/<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g)) {
+        const attrs = c[1]!, corpo = c[2] ?? '', ref = /r="([A-Z]+\d+)"/.exec(attrs)?.[1], tipo = /t="([^"]+)"/.exec(attrs)?.[1];
+        const v = /<(?:\w+:)?v>([\s\S]*?)<\/(?:\w+:)?v>/.exec(corpo)?.[1] ?? '';
+        const valor = tipo === 's' ? comp[Number(v)] ?? '' : tipo === 'inlineStr' ? textos(corpo) : desesc(v);
+        linha[ref ? col(ref) : linha.length] = valor;
+      }
+      linhas.push(Array.from(linha, (x) => x ?? ''));
     }
-    linhas.push(Array.from(linha, (x) => x ?? ''));
-  }
-  return linhas;
+    return linhas;
+  };
+  const caminhoDe = (rid: string) => { const t = alvos.get(rid); return t ? `xl/${t.replace(/^\/?xl\//, '').replace(/^\//, '')}` : ''; };
+  const abas = folhas.map((f) => ({ nome: f.nome, linhas: ler(caminhoDe(f.rid)) })).filter((a) => a.linhas.length || a.nome);
+  if (!abas.length && xml('xl/worksheets/sheet1.xml')) return [{ nome: 'Planilha1', linhas: ler('xl/worksheets/sheet1.xml') }];
+  if (!abas.length) throw new Error('A planilha não tem abas legíveis.');
+  return abas;
 }
+/** Primeira aba (tabelas de preço). */
+export const linhasDeXlsx = (dados: Uint8Array): string[][] => abasDeXlsx(dados)[0]!.linhas;
 
 /** Código → preço. Códigos só com dígitos (como no SINAPI/ORSE); preços positivos. */
 export function tabelaDePrecos(linhas: string[][]): { precos: Map<string, number>; ignoradas: number } {

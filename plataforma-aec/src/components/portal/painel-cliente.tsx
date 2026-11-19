@@ -34,7 +34,7 @@ function Secao({ titulo, sub, children, className }: { titulo: string; sub?: str
 }
 
 /** Curva S: previsto (tracejado) × realizado (cheio), acumulados. Um eixo, uma medida por vez. */
-function CurvaS({ pontos, modo, hoje }: { pontos: PontoCurva[]; modo: 'fisico' | 'financeiro'; hoje: string }) {
+export function CurvaS({ pontos, modo, hoje }: { pontos: PontoCurva[]; modo: 'fisico' | 'financeiro'; hoje: string }) {
   const [foco, setFoco] = React.useState<number | null>(null);
   if (pontos.length < 2) return <p className="text-sm text-muted-foreground">O cronograma ainda não tem meses suficientes para a curva.</p>;
   const prev = pontos.map((p) => (modo === 'fisico' ? p.fisicoPrevisto : p.financeiroPrevisto));

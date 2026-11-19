@@ -97,3 +97,12 @@
   .relatorio-fotos li { break-inside: avoid; }
   .relatorio-fotos img { max-height: 70mm; }
 }
+
+/* Impressão de um relatório qualquer (Relatórios, Alertas, Curvas, Implantação). */
+@media print {
+  body[data-imprimir='area'] aside,
+  body[data-imprimir='area'] *:has(> main) > :not(main),
+  body[data-imprimir='area'] main *:not(:has(.area-impressao)):not(.area-impressao):not(.area-impressao *) { display: none !important; }
+  body[data-imprimir='area'] main, body[data-imprimir='area'] main *:has(.area-impressao) { border: 0 !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; background: none !important; }
+  .area-impressao table { font-size: 9pt; } .area-impressao tr, .area-impressao section { break-inside: avoid; }
+}

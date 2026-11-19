@@ -75,6 +75,7 @@ export default function Inicio() {
           <h2 className="text-sm font-semibold tracking-tight">Central de pendências</h2>
           <p className="mb-4 mt-1 text-xs text-muted-foreground">O que pede uma decisão hoje, do mais grave para o menos grave.</p>
           <ListaPendencias itens={pend.slice(0, 6)} />
+          <Link href="/alertas/" className="mt-3 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline">Ver todos os alertas</Link>
         </section>
         <div className="flex flex-col gap-4 xl:col-span-3">
           <section className="rounded-2xl border bg-card p-5" style={corDaArea(28)}>

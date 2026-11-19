@@ -5,10 +5,10 @@
 import {
   BadgeDollarSign, Boxes, Briefcase, Building, Building2, CalendarRange, Calculator, ClipboardCheck, ClipboardList, Compass, FileSignature, FileText,
   FolderKanban, Gauge, Hammer, HardHat, Landmark, LayoutGrid, NotebookPen, Package, PenTool, Ruler, ScrollText, ShieldAlert, ShieldCheck, ShoppingCart,
-  Store, Truck, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, DatabaseBackup, TrendingUp, type LucideIcon,
+  Store, Truck, Bell, LineChart, FileBarChart, ListChecks, Stethoscope, Scale, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, DatabaseBackup, TrendingUp, type LucideIcon,
 } from 'lucide-react';
 
-export type IdArea = 'clientes' | 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
+export type IdArea = 'controle' | 'clientes' | 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
 
 export interface Tela { href: string; rotulo: string; icone: LucideIcon; descricao: string; soDono?: boolean }
 export interface Area {
@@ -67,6 +67,12 @@ export const AREAS: Area[] = [
     { href: '/gestao/safety/', rotulo: 'Segurança do trabalho', icone: ShieldAlert, descricao: 'DDS, inspeções, incidentes e treinamentos' },
     { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivos, revisões, vencimentos e aprovações' },
   ] },
+  { id: 'controle', nome: 'Controle e Relatórios', resumo: 'Alertas, curvas, relatórios e implantação.', icone: FileBarChart, matiz: 245, telas: [
+    { href: '/alertas/', rotulo: 'Alertas', icone: Bell, descricao: 'Atrasos, vencimentos, estoque, manutenção, qualidade e caixa' },
+    { href: '/curvas/', rotulo: 'Curvas S e ABC', icone: LineChart, descricao: 'Curva S físico-financeira e ABC de materiais, pessoal e equipamentos' },
+    { href: '/relatorios/', rotulo: 'Relatórios', icone: FileBarChart, descricao: 'Os 10 relatórios em Excel, CSV ou PDF e a Super Planilha' },
+    { href: '/implantacao/', rotulo: 'Manual e Implantação', icone: ListChecks, descricao: 'Checklist de implantação por obra e manual do usuário' },
+  ] },
   { id: 'clientes', nome: 'Clientes', resumo: 'Portal em que o cliente acompanha o contrato.', icone: Handshake, matiz: 198, telas: [
     { href: '/clientes/', rotulo: 'Portal do Cliente', icone: MonitorSmartphone, descricao: 'Libere ao cliente o painel do contrato: curva S, medições, parcelas e prazos', soDono: true },
   ] },
@@ -79,7 +85,9 @@ export const AREAS: Area[] = [
     { href: '/admin/', rotulo: 'Empresa e equipe', icone: UserCog, descricao: 'Dados da empresa, responsável técnico, usuários e convites', soDono: true },
     { href: '/admin/seguranca/', rotulo: 'Lixeira e auditoria', icone: ShieldCheck, descricao: 'Recupere registros excluídos e veja quem alterou o quê', soDono: true },
     { href: '/admin/backup/', rotulo: 'Backup e restauração', icone: DatabaseBackup, descricao: 'Cópia completa dos dados com conferência de integridade', soDono: true },
+    { href: '/admin/integridade/', rotulo: 'Integridade e manutenção', icone: Stethoscope, descricao: 'Duplicados, registros sem obra e revisão da EAP', soDono: true },
     { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivo geral da empresa e das obras' },
+    { href: '/legal/', rotulo: 'Termos e direitos autorais', icone: Scale, descricao: 'Termos de uso, privacidade (LGPD) e direitos autorais' },
   ] },
 ];
 

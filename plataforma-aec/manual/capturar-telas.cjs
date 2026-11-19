@@ -82,6 +82,15 @@ fs.writeFileSync(path.join(D, 'extrato.ofx'), OFX); fs.writeFileSync(path.join(D
     await sec.screenshot({ path: path.join(D, 'img', '50-portal-fotos.jpg'), type: 'jpeg', quality: 80 });
     await p.setViewportSize({ width: 1360, height: 850 });
   });
+  await ir('alertas', 1500); await foto('52-alertas', { inteira: true, max: 1300 });
+  await ir('curvas', 2000); await foto('53-curvas', { inteira: true, max: 1500 });
+  await ir('relatorios', 1500);
+  await tenta('relatorio-fin', async () => { await p.getByRole('button', { name: /^Financeiro/ }).click(); await foto('54-relatorios', { inteira: true, max: 1500 }); });
+  await ir('implantacao', 1500);
+  await tenta('implantacao', async () => { for (const k of ['01', '02', '03']) { await p.getByRole('button', { name: new RegExp(`Marcar etapa ${k}`) }).click(); await p.waitForTimeout(250); } await foto('55-implantacao', { inteira: true, max: 1300 }); });
+  await ir('admin/integridade', 1500); await foto('56-integridade', { inteira: true, max: 1500 });
+  await ir('gestao/finance', 1500);
+  await tenta('lote', async () => { const c = p.getByRole('checkbox', { name: /^Selecionar / }); await c.nth(0).check(); await c.nth(1).check(); await foto('57-lote', { max: 850 }); });
   await ir('composicoes', 6000);
   await tenta('parametros', async () => { await p.getByRole('tab', { name: 'Parâmetros' }).click(); await p.getByRole('button', { name: 'Colar tabela' }).click(); await foto('51-precos', { inteira: true, max: 1100 }); });
   await ctx.addInitScript(() => localStorage.setItem('theme', 'dark')); await ir('inicio'); await foto('36-escuro');

@@ -158,6 +158,22 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
       setMsg({ tipo: 'erro', texto });
     }
   };
+  // Ações em lote (como no ObraTop 3): marcar linhas e excluir ou mudar a situação de todas.
+  const [sel, setSel] = React.useState<Set<string>>(new Set());
+  const [statusLote, setStatusLote] = React.useState('');
+  React.useEffect(() => { setSel(new Set()); }, [modulo, obraEscolhida, busca]);
+  const campoStatus = esquema.fields.find((f) => f[0] === 'status' && f[2] === 'select');
+  const emLote = async (patch: Record<string, unknown>, acao: string, texto: string) => {
+    if (!tenantId || sel.size === 0) return;
+    const ids = [...sel], agora = new Date().toISOString(), quem = usuario?.uid ?? '';
+    try {
+      for (let i = 0; i < ids.length; i += 400) await atualizarEmLote(tenantId, ids.slice(i, i + 400).map((id) => ({ caminho: `${modulo}/${id}`, patch: { ...patch, updatedAt: agora, updatedBy: quem } })));
+      void auditar(tenantId, usuario, acao, modulo, ids.join(',').slice(0, 900), undefined, { registros: ids.length, ...patch });
+      setSel(new Set()); setMsg({ tipo: 'ok', texto });
+    } catch { setMsg({ tipo: 'erro', texto: 'Não foi possível alterar os registros selecionados. Verifique a conexão e sua permissão.' }); }
+  };
+  const excluirSelecionados = () => { if (window.confirm(`Excluir ${sel.size} registro(s)? Eles vão para a lixeira e podem ser restaurados.`)) void emLote({ deleted: true, deletedAt: new Date().toISOString(), deletedBy: usuario?.uid ?? '' }, 'bulk-delete', `${sel.size} registro(s) movido(s) para a lixeira.`); };
+  const mudarStatusSelecionados = () => { if (statusLote) void emLote({ status: statusLote }, 'bulk-status', `Situação de ${sel.size} registro(s) alterada para "${statusLote}".`); };
   const excluir = async (r: Reg) => {
     if (!tenantId || !window.confirm(`Excluir "${rotuloRegistro(modulo, r) || 'este registro'}"?`)) return;
     try {
@@ -460,8 +476,18 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
             : registros.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">Nenhum registro{busca ? ' para esta busca' : ''}. {gravavel && !busca ? 'Use "Novo" para começar.' : ''}</p>
             : (
               <div className="overflow-x-auto">
+                {gravavel && sel.size > 0 && (
+                  <div role="region" aria-label="Ações em lote" className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-2 text-sm">
+                    <span className="px-1 font-medium">{sel.size} selecionado(s)</span>
+                    {campoStatus && <><Select aria-label="Nova situação" className="h-8 w-44" value={statusLote} onChange={(e) => setStatusLote(e.target.value)}><option value="">Mudar situação para…</option>{(campoStatus[4] ?? []).map((o) => <option key={o} value={o}>{o}</option>)}</Select>
+                      <Button size="sm" variant="outline" disabled={!statusLote} onClick={mudarStatusSelecionados}>Aplicar</Button></>}
+                    {apaga && <Button size="sm" variant="outline" onClick={excluirSelecionados}><Trash2 className="h-4 w-4" />Excluir selecionados</Button>}
+                    <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Limpar seleção</Button>
+                  </div>
+                )}
                 <table className="w-full min-w-[720px] text-sm">
                   <thead><tr className="border-b text-left text-xs text-muted-foreground">
+                    {gravavel && <th className="w-8 py-2 pr-2"><input type="checkbox" aria-label="Selecionar todos" className="h-4 w-4 accent-primary" checked={sel.size > 0 && sel.size === registros.length} onChange={(e) => setSel(e.target.checked ? new Set(registros.map((x) => x.id)) : new Set())} /></th>}
                     {colunas.map((c) => <th key={c[0]} className={cn('px-2 py-2 font-medium first:pl-0', c[2] === 'number' && 'text-right')}>{c[1].replace(' (opcional)', '')}</th>)}
                     {modulo === 'measurements' && <th className="px-2 py-2 text-right font-medium">Líquido</th>}
                     {modulo === 'contracts' && <th className="px-2 py-2 text-right font-medium">Saldo a medir</th>}
@@ -473,7 +499,8 @@ export function TelaGestao({ modulo }: { modulo: IdModulo }) {
                   </tr></thead>
                   <tbody className="divide-y">
                     {registros.map((r) => (
-                      <tr key={r.id} className="align-top">
+                      <tr key={r.id} className={cn('align-top', sel.has(r.id) && 'bg-primary/5')}>
+                        {gravavel && <td className="py-2 pr-2"><input type="checkbox" aria-label={`Selecionar ${rotuloRegistro(modulo, r)}`} className="h-4 w-4 accent-primary" checked={sel.has(r.id)} onChange={(e) => setSel((s0) => { const n0 = new Set(s0); if (e.target.checked) n0.add(r.id); else n0.delete(r.id); return n0; })} /></td>}
                         {colunas.map((c) => <td key={c[0]} className={cn('max-w-[280px] px-2 py-2 first:pl-0', c[2] === 'number' && 'tabular whitespace-nowrap text-right', c[2] === 'date' && 'tabular whitespace-nowrap')}>{formatar(c, r)}</td>)}
                         {modulo === 'measurements' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(measurementNet(r).net)}</td>}
                         {modulo === 'contracts' && <td className="tabular whitespace-nowrap px-2 py-2 text-right font-medium">{brl(contractBalance(r, medicoes).balance)} <span className="font-normal text-muted-foreground">({pct(contractBalance(r, medicoes).percentLeft / 100, 0)})</span></td>}

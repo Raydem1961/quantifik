@@ -3,6 +3,7 @@
  * os cálculos de avanço, caixa e contrato são os módulos originais (vendor/calc.mjs).
  */
 import { conferir, type Pessoa } from './integracoes/esocial';
+import { alertas } from './obratop/controle';
 import { budgetSale, cashProjection, contractBalance, incurredCost, measurementNet, schedulePerformance } from './obratop/vendor/calc.mjs';
 
 export type Reg = { id: string; deleted?: boolean } & Record<string, unknown>;
@@ -104,6 +105,12 @@ export function kpisDaArea(area: string, d: Dados, hoje: string, vePessoal = tru
       const incompletas = conferir(d.staff as Pessoa[]).filter((c) => c.pendencias.length > 0).length;
       return [{ rotulo: 'Contas em aberto', valor: String(abertas.length), detalhe: 'aguardando baixa pelo extrato' }, { rotulo: 'Conciliadas com o banco', valor: String(f.filter((x) => x.bankRef).length) },
         { rotulo: 'Notas fiscais lançadas', valor: String(notas) }, { rotulo: 'Cadastros incompletos (eSocial)', valor: String(incompletas), alerta: incompletas > 0 }];
+    }
+    case 'controle': {
+      const a = alertas(d as unknown as Record<string, Reg[]>, hoje), criticos = a.filter((x) => x.nivel === 'bad').length;
+      const comImpl = ativas.filter((w) => Object.values(((w.implantation as { items?: Record<string, { done?: boolean }> } | undefined)?.items) ?? {}).filter((i) => i.done).length >= 15).length;
+      return [{ rotulo: 'Alertas críticos', valor: String(criticos), alerta: criticos > 0 }, { rotulo: 'Alertas de atenção', valor: String(a.length - criticos) },
+        { rotulo: 'Relatórios disponíveis', valor: '10', detalhe: 'Excel, CSV e PDF' }, { rotulo: 'Obras implantadas', valor: `${comImpl}/${ativas.length}` }];
     }
     default:
       return [{ rotulo: 'Obras em andamento', valor: String(ativas.length) }, { rotulo: 'Carteira de obras', valor: brl(ativas.reduce((s, w) => s + n(w.value), 0)) },

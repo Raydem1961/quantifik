@@ -26,15 +26,33 @@ const OBRATOP = [
   ['Logotipo e dados da empresa nos relatórios', 'Mesmos campos do ObraTop 3 (valem nos dois)', 'novo'],
   ['Salário visível só a Administrador e Financeiro', 'Oculto para as demais funções (tela, planilha, indicadores)', 'novo'],
   ['Exportar CSV/Excel dos cadastros', 'Botão Planilha (CSV que abre no Excel)', 'novo'],
-  ['Exportar relatórios em Word (.docx) e Excel (.xlsx) nativos', 'PDF e CSV', 'subst'],
+  ['Exportar relatórios em Word (.docx) e Excel (.xlsx) nativos', 'Excel (.xlsx) nativo, CSV e PDF; Word substituído por PDF', 'subst'],
   ['Relatório gerencial da obra em PDF', 'Obras → Relatório PDF', 'ok'],
   ['Anexos de documentos', 'Documentos (Storage)', 'ok'],
   ['Uso offline e instalação no celular', 'PWA com fila de gravação', 'ok'],
   ['Manual e glossário dentro do aplicativo', 'Manual ilustrado (PDF) no botão ?', 'subst'],
   ['Engenharia Inteligente: quantitativos de PDF e Google Planilhas', 'BIM e quantitativos (IFC, DXF, LandXML, EPANET, SWMM, CSV) — PDF não é lido', 'subst'],
-  ['Edição e exclusão em lote', '—', 'nao'],
-  ['Revisão automática da EAP (correção de numeração)', '—', 'nao'],
-  ['Manutenção: detecção e saneamento de registros duplicados', '—', 'nao'],
+  ['Edição e exclusão em lote', 'Caixas de seleção em todos os cadastros: mudar situação e excluir (lixeira)', 'novo'],
+  ['Revisão automática da EAP (correção de numeração)', 'Integridade e manutenção → Renumerar (com predecessoras)', 'novo'],
+  ['Manutenção: detecção e saneamento de registros duplicados', 'Integridade e manutenção → Mover para a Lixeira', 'novo'],
+  ['Menu Alertas (lista completa com a régua de prazos do ObraTop 3)', 'Controle e Relatórios → Alertas', 'novo'],
+  ['Curvas S e ABC de materiais, pessoal, máquinas e equipamentos', 'Controle e Relatórios → Curvas S e ABC', 'novo'],
+  ['Relatórios (10 tipos) em Excel, CSV e impressão/PDF', 'Controle e Relatórios → Relatórios', 'novo'],
+  ['Super Planilha: modelo, exportar tudo e importar planilha completa', 'Relatórios → Super Planilha (com conferência antes de gravar)', 'novo'],
+  ['Manual e Implantação (checklist de 15 etapas por obra)', 'Controle e Relatórios → Manual e Implantação (mesmo campo works.implantation)', 'novo'],
+  ['Integridade e manutenção (contagem por módulo, órfãos, aviso de backup)', 'Administrativo → Integridade e manutenção', 'novo'],
+  ['Direitos Autorais e Licença de Uso', 'Administrativo → Termos e direitos autorais', 'novo'],
+];
+const MENU = [
+  ['Início', 'Painel executivo · Alertas', 'Início · Controle e Relatórios → Alertas'],
+  ['1 Configuração inicial', 'Configurações · Equipe', 'Administrativo → Empresa e equipe'],
+  ['2 Cadastros', 'Obras · Contratos · Fornecedores · Pessoal · Documentos', 'Planejamento e Obras · Financeiro · Suprimentos · Recursos Humanos · Qualidade e Segurança'],
+  ['3 Projeto e planejamento', 'Projetos e Quantitativos · Orçamentos · Cronograma', 'Engenharia e Arquitetura · Orçamento · Planejamento e Obras'],
+  ['4 Suprimentos', 'Compras · Estoque', 'Suprimentos → Compras · Estoque'],
+  ['5 Execução', 'Diário de Obra · Equipamentos · Qualidade · Segurança', 'Planejamento e Obras → Diário · Suprimentos → Equipamentos · Qualidade e Segurança'],
+  ['6 Medição e financeiro', 'Medições · Financeiro · Economia e Equilíbrio', 'Planejamento e Obras → Medições · Financeiro → Lançamentos · Análise econômica'],
+  ['7 Controle e relatórios', 'Curvas S e ABC · Relatórios', 'Controle e Relatórios → Curvas S e ABC · Relatórios (+ Super Planilha)'],
+  ['Administração', 'Auditoria · Lixeira · Integridade e manutenção · Manual e Implantação · Direitos Autorais', 'Administrativo → Lixeira e auditoria · Integridade e manutenção · Termos e direitos autorais; Controle e Relatórios → Manual e Implantação'],
 ];
 const QUANTIFIK = [
   ['Consulta de serviços SINAPI-BA e ORSE-SE (grupos/atividades, busca)', 'Serviços e composições', 'ok'],
@@ -57,9 +75,10 @@ const ERROS = [
   ['Exclusões e alterações do ObraTop 4 não entravam na trilha de auditoria; não havia lixeira.', 'Auditoria a cada gravação; lixeira com restauração.'],
   ['Funções sem obra: nas regras do ObraTop 3, quem tem obra atribuída pode gravar nela — inclusive Consulta.', 'O ObraTop 4 cria Consulta, Gestor e Financeiro sem obra. Atenção: Consultas criadas antes pelo ObraTop 3 com obra mantêm essa permissão nas regras antigas.'],
 ];
-const TESTES = [['Testes de unidade (cálculos, importadores, integrações, portal, fotos, ligações)', 97], ['Testes originais dos cálculos do ObraTop', 34], ['Regras de segurança (emulador)', 32], ['Instalador', 4],
+const TESTES = [['Testes de unidade (cálculos, importadores, integrações, portal, fotos, ligações, planilha, controle)', 105], ['Testes originais dos cálculos do ObraTop', 34], ['Regras de segurança (emulador)', 32], ['Instalador', 4],
   ['Servidor: uploads, auditoria, assinatura, alertas', 45], ['Telas: todas as áreas, convites, papéis', 73], ['Integrações: banco, Pix, NF-e, CNPJ, eSocial', 21], ['Portal do Cliente', 20], ['Uso sem internet', 5],
-  ['Auditoria: fotos, relatório fotográfico, portal, ligações, assistente, lixeira, backup, funções, análise econômica, termos', 36]];
+  ['Auditoria: fotos, relatório fotográfico, portal, ligações, assistente, lixeira, backup, funções, análise econômica, termos', 36],
+  ['Menus do ObraTop 3: alertas, curvas, relatórios, Super Planilha, implantação, integridade, lote, direitos autorais', 22]];
 const total = TESTES.reduce((t, x) => t + x[1], 0);
 
 const html = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><style>
@@ -73,16 +92,18 @@ ul{margin:0;padding-left:5mm} li{margin-bottom:1.2mm} .nota{background:#f6f6fa;b
 <div class="nota"><b>Resumo.</b> Antes desta auditoria o ObraTop 4 <b>não</b> tinha todas as funcionalidades dos dois aplicativos: faltavam as funções Gestor/Financeiro/Consulta, lixeira, auditoria, backup, assistente de obra, análise econômica, as ligações entre compras, estoque, medições e financeiro, e parte da importação de preços do Quantifik. Tudo isso foi implementado e testado. Três recursos menores do ObraTop 3 não foram portados (lista no fim) e quatro foram substituídos por equivalentes.</div>
 <h2>1. Pedidos desta etapa</h2><ul><li><b>Fotos diárias no Diário de Obra</b>: câmera ou galeria, até 40 por dia, reduzidas no aparelho (foto + miniatura), legenda, serviço do cronograma e marcação "uso interno"; relatório fotográfico por dia, ampliação em tela cheia e impressão em PDF.</li>
 <li><b>Relatório fotográfico no Portal do Cliente</b>: mês a mês, só fotos de diários assinados e não marcadas como internas; o cliente só acessa o da própria obra (regras testadas).</li></ul>
-<h2>2. ObraTop 3 → ObraTop 4</h2>${tabela(OBRATOP)}
-<h2>3. Quantifik → ObraTop 4</h2>${tabela(QUANTIFIK)}
-<h2>4. Erros encontrados e soluções</h2><table><thead><tr><th>Erro</th><th>Solução</th></tr></thead><tbody>${ERROS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</tbody></table>
-<h2>5. Testes</h2><table><thead><tr><th>Conjunto</th><th style="text-align:right">Verificações</th></tr></thead><tbody>${TESTES.map(([a, b]) => `<tr><td>${a}</td><td style="text-align:right">${b}</td></tr>`).join('')}<tr><td><b>Total</b></td><td style="text-align:right"><b>${total}</b></td></tr></tbody></table>
+<h2>2. Menus e submenus do ObraTop 3</h2><div class="nota"><b>Correção da auditoria anterior.</b> A primeira versão deste relatório comparou funcionalidades, mas não conferiu menu por menu. Na conferência dos menus do ObraTop 3 faltavam no ObraTop 4: <b>Alertas</b> (página completa), <b>Curvas S e ABC</b>, <b>Relatórios</b> com a <b>Super Planilha</b>, <b>Manual e Implantação</b>, <b>Integridade e manutenção</b> e <b>Direitos Autorais</b>, além das ações em lote. Todos foram implementados e testados (22 verificações de ponta a ponta).</div>
+<table><thead><tr><th>Menu do ObraTop 3</th><th>Submenus</th><th>Onde está no ObraTop 4</th></tr></thead><tbody>${MENU.map(([a, b, c]) => `<tr><td><b>${a}</b></td><td>${b}</td><td>${c} ${sel('ok')}</td></tr>`).join('')}</tbody></table>
+<h2>3. Funcionalidades: ObraTop 3 → ObraTop 4</h2>${tabela(OBRATOP)}
+<h2>4. Quantifik → ObraTop 4</h2>${tabela(QUANTIFIK)}
+<h2>5. Erros encontrados e soluções</h2><table><thead><tr><th>Erro</th><th>Solução</th></tr></thead><tbody>${ERROS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</tbody></table>
+<h2>6. Testes</h2><table><thead><tr><th>Conjunto</th><th style="text-align:right">Verificações</th></tr></thead><tbody>${TESTES.map(([a, b]) => `<tr><td>${a}</td><td style="text-align:right">${b}</td></tr>`).join('')}<tr><td><b>Total</b></td><td style="text-align:right"><b>${total}</b></td></tr></tbody></table>
 <p>Os testes de ponta a ponta rodam contra os emuladores do Firebase (banco, autenticação, arquivos e funções) — fotos reais são enviadas e lidas. Provedores externos (Clicksign, consulta de CNPJ) são simulados.</p>
-<h2>6. Para chegar a 10/10</h2><h3>Depende de você (não pode ser feito daqui)</h3><ul>
+<h2>7. Para chegar a 10/10</h2><h3>Depende de você (não pode ser feito daqui)</h3><ul>
 <li><b>Publicar esta versão</b> com o instalador (INSTALAR.cmd) e conferir com os dados reais.</li><li><b>Revisar os Termos e a Política de Privacidade</b> com o jurídico e preencher razão social, CNPJ e encarregado de dados (página /legal/).</li>
 <li><b>Ativar o App Check</b> no Console do Firebase (protege contra uso abusivo — o próprio Firebase recomenda na tela do Storage).</li><li>Contratos e certificados para as integrações oficiais: Clicksign (assinatura), Autodesk APS (DWG), e-CNPJ A1 (NF-e/NFS-e, eSocial), API do banco (extrato automático, boletos).</li>
 <li>Definir um orçamento/alerta de gastos no plano Blaze.</li></ul>
-<h3>Não portados do ObraTop 3 (baixo impacto)</h3><ul><li>Edição e exclusão em lote.</li><li>Revisão automática da numeração da EAP.</li><li>Detecção e saneamento de registros duplicados.</li></ul>
+<h3>Diferenças que permanecem (substituídas por equivalente)</h3><ul><li>Relatórios em Word (.docx): o ObraTop 4 gera Excel, CSV e PDF.</li><li>Pontos de restauração no servidor: substituídos por backup em arquivo com conferência SHA-256.</li><li>Glossário dentro do aplicativo: substituído pelo manual ilustrado (PDF).</li></ul>
 <h3>Recomendações</h3><ul><li>Monitoramento de erros em produção (ex.: Sentry ou Crashlytics) para saber de falhas antes do cliente.</li><li>Backup semanal (Administrativo → Backup e restauração) guardado fora do computador.</li>
 <li>Rever as Consultas antigas criadas pelo ObraTop 3 com obra atribuída (podem gravar naquela obra pelas regras antigas): troque a função ou a obra em Equipe.</li></ul>
 </body></html>`;
