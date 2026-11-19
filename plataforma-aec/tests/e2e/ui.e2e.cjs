@@ -372,6 +372,13 @@ const SWMM = '[OPTIONS]\nFLOW_UNITS LPS\n[JUNCTIONS]\nPV1 100 1.2\n[CONDUITS]\nC
     const pn = await novaPagina();
     await entrar(pn, 'novo@atelier.test');
     await pn.getByLabel('Nome da empresa').fill('Construtora Nova');
+    // Sem código de licença a criação é recusada (o furo que existia).
+    await pn.getByLabel('Código de licença').fill('OT4-INEXI-STENT-E0000');
+    await pn.getByRole('button', { name: 'Criar empresa' }).click();
+    checar('criar empresa sem licença válida é recusado', await pn.getByText('Código de licença inválido ou já utilizado.').waitFor({ timeout: 15000 }).then(() => true, () => false));
+    const lic = `OT4-UITST-${String(Date.now()).slice(-5)}-AAAAA`;
+    await adb.doc(`licencas/${lic}`).set({ usada: false, email: '', cliente: 'Construtora Nova', expiraEm: new Date(Date.now() + 86400000) });
+    await pn.getByLabel('Código de licença').fill(lic);
     await pn.getByRole('button', { name: 'Criar empresa' }).click();
     const nova = await ate(async () => { const x = await adb.collection('organizations').where('name', '==', 'Construtora Nova').get(); return x.empty ? null : x.docs[0]; });
     checar('criar empresa: usuário vira proprietário', nova?.data().ownerUid === uids.semVinculo && (await nova.ref.collection('members').doc(uids.semVinculo).get()).data()?.role === 'owner');

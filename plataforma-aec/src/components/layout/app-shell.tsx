@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { atualizarDoc, useColecao } from '@/hooks/use-colecao';
 import { MODO_DEMO } from '@/lib/firebase/client';
 import { AREAS, INICIO, corDaArea, localizar, type Area } from '@/lib/modulos';
+import { useAdminPlataforma } from '@/lib/licencas';
 import { ROLE_LABEL, type AppNotification } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -67,6 +68,8 @@ function Marca({ compacta }: { compacta?: boolean }) {
 }
 
 function Menu_({ area, caminho, soDono, onNavegar }: { area: Area | undefined; caminho: string; soDono: boolean; onNavegar?: () => void }) {
+  const { usuario } = useAuth();
+  const plataforma = useAdminPlataforma(usuario?.uid);
   return (
     <nav aria-label="Áreas do aplicativo" className="flex min-h-0 flex-1">
       {/* Trilho: uma área por ícone */}
@@ -98,7 +101,7 @@ function Menu_({ area, caminho, soDono, onNavegar }: { area: Area | undefined; c
             <span className="block text-xs text-muted-foreground">{area.resumo}</span>
           </Link>
           <ul className="flex flex-col gap-0.5">
-            {area.telas.filter((t) => !t.soDono || soDono).map((t) => {
+            {area.telas.filter((t) => (!t.soDono || soDono) && (!t.soPlataforma || plataforma)).map((t) => {
               const ativo = semBarra(caminho) === semBarra(t.href);
               return (
                 <li key={t.href}>

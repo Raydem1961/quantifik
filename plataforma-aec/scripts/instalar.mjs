@@ -8,7 +8,7 @@
 // Pode ser executado de novo a qualquer momento: atualiza o que mudou e não duplica nada.
 //
 // Uso sem perguntas (automação): node scripts/instalar.mjs --sim [--socio email] [--empresa "Nome"]
-//                                [--site id] [--sem-publicar]
+//                                [--site id] [--sem-publicar] [--admin-plataforma email]
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -81,6 +81,21 @@ export async function organizacoesObraTop(db) {
     orgs.push({ id: d.id, nome: d.data().name ?? d.id, donoEmail: dono?.email ?? '', membros: membros.length, registros });
   }
   return orgs.sort((a, b) => b.registros - a.registros);
+}
+
+/**
+ * Define quem é o administrador da plataforma (emite os códigos de licença para novas empresas).
+ * Grava plataforma/acesso — documento que o aplicativo só lê; nenhuma conta consegue alterá-lo.
+ * Acrescenta (não remove) administradores; aceita o e-mail mesmo antes de a conta existir.
+ */
+export async function definirAdminPlataforma(db, auth, email) {
+  const e = String(email ?? '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('E-mail do administrador da plataforma inválido.');
+  const { FieldValue } = await import('firebase-admin/firestore');
+  let uid = '';
+  try { uid = (await auth.getUserByEmail(e)).uid; } catch { /* conta ainda não criada: vale pelo e-mail confirmado */ }
+  await db.doc('plataforma/acesso').set({ emails: FieldValue.arrayUnion(e), ...(uid ? { admins: FieldValue.arrayUnion(uid) } : {}), atualizadoEm: new Date().toISOString() }, { merge: true });
+  return { email: e, uid };
 }
 
 // ───────────────────────── execução ─────────────────────────
@@ -247,10 +262,22 @@ async function principal() {
   if (org) ok(`ObraTop encontrado: "${org.nome}" (${org.registros} registros, ${org.membros} usuário(s)). O novo aplicativo usa esses mesmos dados e usuários — nada é copiado nem alterado.`);
   else ok('Projeto sem empresa cadastrada: na primeira vez que abrir o aplicativo, crie sua conta e a empresa.');
   const socio = org?.donoEmail ?? '';
+  // Criar empresa passa a exigir código de licença; quem emite os códigos é o administrador da plataforma.
+  let adminAtual = [];
+  try { adminAtual = (await db.doc('plataforma/acesso').get()).data()?.emails ?? []; } catch { /* ainda não definido */ }
+  const emailAdmin = opcao('admin-plataforma') ?? (adminAtual.length && SEM_PERGUNTAS ? '' : await perguntar('E-mail do administrador da plataforma (quem emite os códigos de licença)', adminAtual[0] ?? (socio || opcao('socio') || '')));
+  if (emailAdmin) {
+    try {
+      const r = await definirAdminPlataforma(db, auth, emailAdmin);
+      ok(`Administrador da plataforma: ${r.email}. Só ele emite códigos de licença (Administrativo → Licenças da plataforma).`);
+      if (!r.uid) aviso('Essa conta ainda não existe: crie a conta com esse e-mail e confirme o e-mail pelo link recebido.');
+    } catch (e) { aviso(`Não consegui definir o administrador da plataforma: ${e.message}`); }
+  } else if (!adminAtual.length) aviso('Nenhum administrador da plataforma definido: ninguém conseguirá criar empresa nova. Execute o instalador de novo e informe o e-mail.');
+  else ok(`Administrador da plataforma mantido: ${adminAtual.join(', ')}.`);
 
   rl.close();
   titulo('Pronto');
-  console.log(`\n   Aplicativo:  ${endereco}\n   ${socio ? `Entrar com:  ${socio}   (a mesma senha do ObraTop)` : 'Primeiro acesso: clique em "Criar conta" e depois em "Criar minha empresa".'}\n`);
+  console.log(`\n   Aplicativo:  ${endereco}\n   ${socio ? `Entrar com:  ${socio}   (a mesma senha do ObraTop)` : 'Primeiro acesso: clique em "Criar conta" com o e-mail do administrador da plataforma, confirme o e-mail e clique em "Criar minha empresa".'}\n`);
   if (!SEM_PERGUNTAS && !tem('sem-publicar')) abrirNoNavegador(`${endereco}/login/`);
 }
 

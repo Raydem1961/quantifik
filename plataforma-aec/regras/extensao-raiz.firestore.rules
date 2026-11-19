@@ -62,3 +62,43 @@
         && request.resource.data.mes == mes && request.resource.data.dias is list;
       allow delete: if owner(resource.data.orgId);
     }
+
+    // ── Licenças: criar empresa só com código emitido pelo administrador da plataforma ──
+    // O administrador da plataforma é definido pelo instalador em plataforma/acesso (ninguém grava
+    // esse documento pelo aplicativo). Cada código vale para UMA empresa e, se emitido para um
+    // e-mail, só para esse e-mail confirmado.
+    function plataformaAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/plataforma/acesso) && (
+        request.auth.uid in get(/databases/$(database)/documents/plataforma/acesso).data.get('admins', []) ||
+        (request.auth.token.get('email_verified', false) == true &&
+         request.auth.token.get('email', '') in get(/databases/$(database)/documents/plataforma/acesso).data.get('emails', [])));
+    }
+    function licencaParaEmpresa(orgId) {
+      let codigo = request.resource.data.get('licenca', '');
+      return plataformaAdmin() || (codigo is string && codigo.size() >= 12 &&
+        getAfter(/databases/$(database)/documents/licencas/$(codigo)).data.get('orgId', '') == orgId &&
+        getAfter(/databases/$(database)/documents/licencas/$(codigo)).data.get('usadaPor', '') == request.auth.uid);
+    }
+    match /plataforma/{docId} {
+      allow read: if plataformaAdmin();
+      allow write: if false;
+    }
+    match /licencas/{codigo} {
+      allow list: if plataformaAdmin();
+      allow get: if plataformaAdmin() || (signedIn() && resource.data.get('usada', false) == false);
+      allow create: if plataformaAdmin() && codigo.size() >= 12 && request.resource.data.usada == false &&
+        request.resource.data.email is string && request.resource.data.email.size() <= 254 &&
+        request.resource.data.cliente is string && request.resource.data.cliente.size() <= 160 &&
+        request.resource.data.expiraEm is timestamp && request.resource.data.expiraEm > request.time &&
+        request.resource.data.keys().hasOnly(['usada', 'email', 'cliente', 'expiraEm', 'criadaEm', 'criadaPor', 'observacao']);
+      allow delete: if plataformaAdmin() && resource.data.usada == false;
+      // Uso do código: só pela própria pessoa, uma vez, dentro do prazo, junto com a criação da empresa.
+      allow update: if signedIn() && resource.data.usada == false && request.time < resource.data.expiraEm &&
+        (resource.data.email == '' || (request.auth.token.get('email_verified', false) == true && request.auth.token.get('email', '') == resource.data.email)) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usada', 'orgId', 'usadaPor', 'usadaEm', 'usadaEmail']) &&
+        request.resource.data.usada == true && request.resource.data.usadaPor == request.auth.uid &&
+        request.resource.data.orgId is string &&
+        getAfter(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)).data.get('ownerUid', '') == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/organizations/$(request.resource.data.orgId)).data.get('licenca', '') == codigo &&
+        !exists(/databases/$(database)/documents/organizations/$(request.resource.data.orgId));
+    }

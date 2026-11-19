@@ -30,7 +30,12 @@ export default function Login() {
 
   React.useEffect(() => {
     // Quem chega por um link de convite normalmente ainda não tem conta.
-    try { if (sessionStorage.getItem('obratop.convite')) { setConvite(true); setModo('criar'); } } catch { /* sem armazenamento */ }
+    try {
+      // Link de licença (enviado pelo administrador da plataforma): guarda o código para a criação da empresa.
+      const l = new URLSearchParams(window.location.search).get('licenca');
+      if (l && /^[A-Za-z0-9-]{12,40}$/.test(l)) { sessionStorage.setItem('obratop.licenca', l.toUpperCase()); setModo('criar'); }
+      if (sessionStorage.getItem('obratop.convite')) { setConvite(true); setModo('criar'); }
+    } catch { /* sem armazenamento */ }
   }, []);
   React.useEffect(() => { if (!carregando && usuario) router.replace('/inicio/'); }, [carregando, usuario, router]);
 
@@ -78,7 +83,7 @@ export default function Login() {
           <p className="mb-8 flex items-center gap-2.5 font-semibold lg:hidden"><Simbolo className="h-9 w-9" /><Nome className="font-bold tracking-tight" /></p>
           <h2 className="text-2xl font-semibold tracking-tight">{modo === 'entrar' ? 'Entrar' : 'Criar conta'}</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            {MODO_DEMO ? 'Modo demonstração — Firebase não configurado.' : convite && modo === 'criar' ? 'Você recebeu um convite. Crie sua conta com o e-mail convidado.' : modo === 'entrar' ? 'Use a conta da sua empresa.' : 'Depois você cria sua empresa ou usa um convite.'}
+            {MODO_DEMO ? 'Modo demonstração — Firebase não configurado.' : convite && modo === 'criar' ? 'Você recebeu um convite. Crie sua conta com o e-mail convidado.' : modo === 'entrar' ? 'Use a conta da sua empresa.' : 'Depois você cria sua empresa (com o código de licença) ou usa um convite.'}
           </p>
           <form className="mt-6 flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void enviar(); }}>
             {modo === 'criar' && <Field label="Seu nome"><Input autoComplete="name" required maxLength={80} value={nome} onChange={(e) => setNome(e.target.value)} /></Field>}

@@ -8,6 +8,7 @@ import { sendEmailVerification } from 'firebase/auth';
 import { useAuth } from '@/hooks/use-auth';
 import { auth } from '@/lib/firebase/client';
 import { aceitarConvite, criarEmpresa } from '@/lib/obratop/empresa';
+import { useAdminPlataforma } from '@/lib/licencas';
 
 /** Primeiro acesso: criar a empresa (vira proprietário) ou entrar com um convite. */
 export function Onboarding() {
@@ -17,17 +18,22 @@ export function Onboarding() {
   const [nome, setNome] = React.useState('');
   const [cnpj, setCnpj] = React.useState('');
   const [codigo, setCodigo] = React.useState('');
+  const [licenca, setLicenca] = React.useState('');
+  const adminPlataforma = useAdminPlataforma(usuario?.uid);
   const [estado, setEstado] = React.useState<{ ocupado?: boolean; erro?: string }>({});
   React.useEffect(() => {
     let c = new URLSearchParams(window.location.search).get('convite');
     try { c = c || sessionStorage.getItem('obratop.convite'); } catch { /* sem armazenamento */ }
     if (c) { setCodigo(c); setModo('convite'); }
+    let l = new URLSearchParams(window.location.search).get('licenca');
+    try { l = l || sessionStorage.getItem('obratop.licenca'); } catch { /* sem armazenamento */ }
+    if (l) { setLicenca(l); setModo('empresa'); }
   }, []);
   const enviar = async () => {
     setEstado({ ocupado: true });
     try {
-      if (modo === 'empresa') await criarEmpresa(nome, cnpj); else await aceitarConvite(codigo);
-      try { sessionStorage.removeItem('obratop.convite'); } catch { /* sem armazenamento */ }
+      if (modo === 'empresa') await criarEmpresa(nome, cnpj, licenca); else await aceitarConvite(codigo);
+      try { sessionStorage.removeItem('obratop.convite'); sessionStorage.removeItem('obratop.licenca'); } catch { /* sem armazenamento */ }
       recarregar();
     } catch (e) { setEstado({ erro: e instanceof Error && !/permission/i.test(e.message) ? e.message : 'Não foi possível concluir. Confira os dados e tente de novo.' }); }
   };
@@ -49,7 +55,8 @@ export function Onboarding() {
           {modo === 'empresa' ? (<>
             <Field label="Nome da empresa"><Input required maxLength={120} value={nome} onChange={(e) => setNome(e.target.value)} /></Field>
             <Field label="CNPJ (opcional)"><Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} /></Field>
-            <p className="text-xs text-muted-foreground">Você será o administrador e poderá convidar a equipe depois.</p>
+            {!adminPlataforma && <Field label="Código de licença"><Input required autoComplete="off" placeholder="OT4-XXXXX-XXXXX-XXXXX" value={licenca} onChange={(e) => setLicenca(e.target.value)} /></Field>}
+            <p className="text-xs text-muted-foreground">{adminPlataforma ? 'Você é o administrador da plataforma: não precisa de código.' : 'Para criar uma empresa é preciso o código de licença fornecido pelo ObraTop. Cada código vale para uma empresa.'} Você será o administrador e poderá convidar a equipe depois.</p>
           </>) : (<>
             <Field label="Código do convite"><Input required value={codigo} onChange={(e) => setCodigo(e.target.value)} /></Field>
             <p className="text-xs text-muted-foreground">O convite vale para o e-mail em que foi emitido. Peça o código ao administrador da empresa.</p>

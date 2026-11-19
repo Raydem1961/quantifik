@@ -10,18 +10,34 @@ import type { Funcao } from '@/lib/obratop/permissoes';
 
 export const PERFIL_LABEL: Record<string, string> = { '': 'Usuário de obra', coordenador: 'Coordenador', orcamentista: 'Orçamentista', projetista: 'Projetista' };
 
-/** Cria a empresa com o usuário atual como proprietário (mesmo lote de gravações do ObraTop). */
-export async function criarEmpresa(nome: string, cnpj: string): Promise<string> {
+/**
+ * Cria a empresa com o usuário atual como proprietário (mesmo lote de gravações do ObraTop).
+ * Exige um código de licença emitido pelo administrador da plataforma: o código é gasto no mesmo
+ * lote, e as regras do banco recusam a criação sem ele.
+ */
+export async function criarEmpresa(nome: string, cnpj: string, licenca = ''): Promise<string> {
   const u = auth().currentUser;
   if (!u) throw new Error('Entre na sua conta primeiro.');
   const limpo = nome.trim();
   if (!limpo || limpo.length > 120) throw new Error('Informe o nome da empresa (até 120 caracteres).');
+  const codigo = licenca.trim().toUpperCase().replace(/\s+/g, '');
   const id = crypto.randomUUID();
   const lote = writeBatch(db()), agora = serverTimestamp();
-  lote.set(doc(db(), 'organizations', id), { name: limpo, cnpj: cnpj.trim(), ownerUid: u.uid, legacyMigrated: true, createdAt: agora, updatedAt: agora });
+  lote.set(doc(db(), 'organizations', id), { name: limpo, cnpj: cnpj.trim(), ownerUid: u.uid, legacyMigrated: true, createdAt: agora, updatedAt: agora, ...(codigo ? { licenca: codigo } : {}) });
   lote.set(doc(db(), 'organizations', id, 'members', u.uid), { email: u.email, name: u.displayName || u.email, role: 'owner', status: 'active', createdAt: agora });
   lote.set(doc(db(), 'users', u.uid), { email: u.email, currentOrg: id, updatedAt: agora }, { merge: true });
-  await lote.commit();
+  if (codigo) lote.update(doc(db(), 'licencas', codigo), { usada: true, orgId: id, usadaPor: u.uid, usadaEm: agora, usadaEmail: u.email ?? '' });
+  try { await lote.commit(); } catch (e) {
+    if (codigo) {
+      const l = await getDoc(doc(db(), 'licencas', codigo)).catch(() => null);
+      if (!l?.exists()) throw new Error('Código de licença inválido ou já utilizado.');
+      const d = l.data();
+      if ((d.expiraEm as Timestamp | undefined)?.toMillis?.() && d.expiraEm.toMillis() < Date.now()) throw new Error('Este código de licença venceu. Peça um novo.');
+      if (d.email && d.email !== u.email) throw new Error(`Este código foi emitido para outro e-mail. Entre com ${d.email} ou peça um novo código.`);
+      if (d.email && !u.emailVerified) throw new Error('Confirme o seu e-mail (link enviado na criação da conta) e tente de novo.');
+    }
+    throw codigo ? e : new Error('Informe o código de licença fornecido pelo ObraTop.');
+  }
   return id;
 }
 

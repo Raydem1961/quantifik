@@ -73,7 +73,7 @@ export function TelaArea({ id }: { id: string }) {
   const dia = hoje();
   const kpis = kpisDeProjetos(area.id, projetos, cotacoes.length) ?? kpisDaArea(area.id, d, dia, veDadosDePessoal(funcao));
   const pend = pendencias(d, dia).filter((p) => p.area === area.id);
-  const telas = area.telas.filter((t) => !t.soDono || role === 'socio_diretor');
+  const telas = area.telas.filter((t) => (!t.soDono || role === 'socio_diretor') && !t.soPlataforma);
   return (
     <div style={corDaArea(area.matiz)} className="aurora">
       <header className="mb-6 flex items-center gap-4">

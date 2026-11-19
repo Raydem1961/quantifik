@@ -25,7 +25,8 @@
     "regras:gerar": "node scripts/gerar-regras.mjs",
     "test:e2e:portal": "node tests/e2e/portal.e2e.cjs",
     "test:e2e:auditoria": "node tests/e2e/auditoria.e2e.cjs",
-    "test:e2e:controle": "node tests/e2e/controle.e2e.cjs"
+    "test:e2e:controle": "node tests/e2e/controle.e2e.cjs",
+    "test:e2e:licencas": "node tests/e2e/licencas.e2e.cjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",

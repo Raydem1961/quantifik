@@ -42,6 +42,7 @@ const OBRATOP = [
   ['Manual e Implantação (checklist de 15 etapas por obra)', 'Controle e Relatórios → Manual e Implantação (mesmo campo works.implantation)', 'novo'],
   ['Integridade e manutenção (contagem por módulo, órfãos, aviso de backup)', 'Administrativo → Integridade e manutenção', 'novo'],
   ['Direitos Autorais e Licença de Uso', 'Administrativo → Termos e direitos autorais', 'novo'],
+  ['Criação de empresa controlada por licença (código de uso único emitido pelo administrador da plataforma)', 'Administrativo → Licenças da plataforma; código exigido em Criar minha empresa', 'novo'],
 ];
 const MENU = [
   ['Início', 'Painel executivo · Alertas', 'Início · Controle e Relatórios → Alertas'],
@@ -66,6 +67,7 @@ const QUANTIFIK = [
   ['Cotação levada ao orçamento da obra → cronograma', 'Enviar ao orçamento da obra', 'ok'],
 ];
 const ERROS = [
+  ['Qualquer pessoa que criasse uma conta podia criar uma empresa e virar proprietária dela (regra do ObraTop 3, que vale para os dois aplicativos). Não via os dados de outras empresas, mas usava o sistema sem autorização.', 'Criar empresa passou a exigir código de licença de uso único, emitido só pelo administrador da plataforma; o servidor recusa sem código. 2 testes de regras e 15 de ponta a ponta.'],
   ['Funções Gestor, Financeiro e Consulta do ObraTop 3 eram tratadas como usuário de uma obra só (perdiam o acesso às demais obras).', 'Sessão, telas e regras reconhecem as cinco funções; 7 testes de regras cobrem cada função.'],
   ['A função Consulta conseguia lançar horas técnicas e marcações de revisão (achado pelos testes de regras).', 'Regras corrigidas (Consulta só lê) e testadas.'],
   ['Salários e dados pessoais da equipe apareciam para todas as funções (o ObraTop 3 escondia).', 'Ocultos para Gestor, Engenheiro da obra e Consulta na tela, na planilha, nos indicadores e no eSocial.'],
@@ -75,9 +77,10 @@ const ERROS = [
   ['Exclusões e alterações do ObraTop 4 não entravam na trilha de auditoria; não havia lixeira.', 'Auditoria a cada gravação; lixeira com restauração.'],
   ['Funções sem obra: nas regras do ObraTop 3, quem tem obra atribuída pode gravar nela — inclusive Consulta.', 'O ObraTop 4 cria Consulta, Gestor e Financeiro sem obra. Atenção: Consultas criadas antes pelo ObraTop 3 com obra mantêm essa permissão nas regras antigas.'],
 ];
-const TESTES = [['Testes de unidade (cálculos, importadores, integrações, portal, fotos, ligações, planilha, controle)', 105], ['Testes originais dos cálculos do ObraTop', 34], ['Regras de segurança (emulador)', 32], ['Instalador', 4],
-  ['Servidor: uploads, auditoria, assinatura, alertas', 45], ['Telas: todas as áreas, convites, papéis', 73], ['Integrações: banco, Pix, NF-e, CNPJ, eSocial', 21], ['Portal do Cliente', 20], ['Uso sem internet', 5],
+const TESTES = [['Testes de unidade (cálculos, importadores, integrações, portal, fotos, ligações, planilha, controle)', 105], ['Testes originais dos cálculos do ObraTop', 34], ['Regras de segurança (emulador)', 33], ['Instalador', 6],
+  ['Servidor: uploads, auditoria, assinatura, alertas', 45], ['Telas: todas as áreas, convites, papéis', 74], ['Integrações: banco, Pix, NF-e, CNPJ, eSocial', 21], ['Portal do Cliente', 20], ['Uso sem internet', 5],
   ['Auditoria: fotos, relatório fotográfico, portal, ligações, assistente, lixeira, backup, funções, análise econômica, termos', 36],
+  ['Licenças: emissão, uso único, e-mail, link e revogação', 15],
   ['Menus do ObraTop 3: alertas, curvas, relatórios, Super Planilha, implantação, integridade, lote, direitos autorais', 22]];
 const total = TESTES.reduce((t, x) => t + x[1], 0);
 

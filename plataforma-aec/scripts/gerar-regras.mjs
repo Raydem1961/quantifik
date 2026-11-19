@@ -32,9 +32,16 @@ function inserirAntesDoFim(texto, cabecalhoRe, bloco, recuo) {
   const inicioLinha = texto.lastIndexOf('\n', fim) + 1;
   return `${texto.slice(0, inicioLinha)}${recuo}${INICIO}\n${bloco.replace(/\s+$/, '')}\n${recuo}${FIM}\n${texto.slice(inicioLinha)}`;
 }
+// Trava de licença inserida na regra de criação de empresa do ObraTop (a única alteração na base).
+export const TRAVA = '/* ObraTop4: licença */ licencaParaEmpresa(orgId) && ';
+function travarCriacaoDeEmpresa(texto) {
+  const re = /(match\s+\/organizations\/\{orgId\}\s*\{\s*allow\s+create\s*:\s*if\s+)/;
+  if (!re.test(texto)) throw new Error('Não encontrei a regra de criação de empresa do ObraTop para exigir a licença.');
+  return texto.replace(re, `$1${TRAVA}`);
+}
 /** Remove extensões aplicadas antes (reinstalação). */
 export function limpar(texto) {
-  let t = texto;
+  let t = texto.split(TRAVA).join('');
   for (;;) {
     const a = t.indexOf(INICIO);
     if (a < 0) return t;
@@ -47,7 +54,7 @@ export function limpar(texto) {
 /** Regras do Firestore: base + extensão no nível raiz + extensão dentro de cada organização. */
 export function estenderFirestore(base, extRaiz, extOrg) {
   const limpo = limpar(base);
-  const comOrg = inserirAntesDoFim(limpo, /match\s+\/organizations\/\{orgId\}\s*\{/, extOrg, '      ');
+  const comOrg = inserirAntesDoFim(travarCriacaoDeEmpresa(limpo), /match\s+\/organizations\/\{orgId\}\s*\{/, extOrg, '      ');
   if (comOrg === null) throw new Error('As regras não têm o bloco "match /organizations/{orgId}" do ObraTop.');
   const final = inserirAntesDoFim(comOrg, /match\s+\/databases\/\{database\}\/documents\s*\{/, extRaiz, '    ');
   if (final === null) throw new Error('Regras do Firestore sem o bloco de documentos.');

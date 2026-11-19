@@ -5,12 +5,12 @@
 import {
   BadgeDollarSign, Boxes, Briefcase, Building, Building2, CalendarRange, Calculator, ClipboardCheck, ClipboardList, Compass, FileSignature, FileText,
   FolderKanban, Gauge, Hammer, HardHat, Landmark, LayoutGrid, NotebookPen, Package, PenTool, Ruler, ScrollText, ShieldAlert, ShieldCheck, ShoppingCart,
-  Store, Truck, Bell, LineChart, FileBarChart, ListChecks, Stethoscope, Scale, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, DatabaseBackup, TrendingUp, type LucideIcon,
+  Store, Truck, KeySquare, Bell, LineChart, FileBarChart, ListChecks, Stethoscope, Scale, Users, UserCog, Wallet, Wrench, Banknote, Plug, Receipt, Contact, Handshake, MonitorSmartphone, DatabaseBackup, TrendingUp, type LucideIcon,
 } from 'lucide-react';
 
 export type IdArea = 'controle' | 'clientes' | 'integracoes' | 'comercial' | 'engenharia' | 'orcamento' | 'planejamento' | 'suprimentos' | 'financeiro' | 'rh' | 'qualidade' | 'administrativo';
 
-export interface Tela { href: string; rotulo: string; icone: LucideIcon; descricao: string; soDono?: boolean }
+export interface Tela { href: string; rotulo: string; icone: LucideIcon; descricao: string; soDono?: boolean; /** Só o administrador da plataforma (emite licenças). */ soPlataforma?: boolean }
 export interface Area {
   id: IdArea;
   nome: string;
@@ -87,6 +87,7 @@ export const AREAS: Area[] = [
     { href: '/admin/backup/', rotulo: 'Backup e restauração', icone: DatabaseBackup, descricao: 'Cópia completa dos dados com conferência de integridade', soDono: true },
     { href: '/admin/integridade/', rotulo: 'Integridade e manutenção', icone: Stethoscope, descricao: 'Duplicados, registros sem obra e revisão da EAP', soDono: true },
     { href: '/gestao/documents/', rotulo: 'Documentos', icone: FileText, descricao: 'Arquivo geral da empresa e das obras' },
+    { href: '/plataforma/', rotulo: 'Licenças da plataforma', icone: KeySquare, descricao: 'Códigos de licença para novas empresas', soDono: true, soPlataforma: true },
     { href: '/legal/', rotulo: 'Termos e direitos autorais', icone: Scale, descricao: 'Termos de uso, privacidade (LGPD) e direitos autorais' },
   ] },
 ];

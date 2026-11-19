@@ -112,18 +112,63 @@ describe('ObraTop: o que já valia continua valendo', () => {
     await assertFails(setDoc(doc(como('proj'), `${O}/dailyLogs/d3`), { workId: 'w1', laborCount: -2, deleted: false }));
     await assertFails(deleteDoc(doc(como('proj'), `${O}/dailyLogs/d1`)));
   });
-  it('criar empresa: o próprio usuário vira proprietário, e só dele', async () => {
-    const db = como('novo');
-    const lote = writeBatch(db);
-    lote.set(doc(db, 'organizations/N'), { name: 'Nova', ownerUid: 'novo' });
-    lote.set(doc(db, 'organizations/N/members/novo'), { role: 'owner', status: 'active', email: 'novo@x.com' });
-    lote.set(doc(db, 'users/novo'), { currentOrg: 'N' });
-    await assertSucceeds(lote.commit());
+  it('criar empresa: só com licença válida; o próprio usuário vira proprietário, e só dele', async () => {
+    const validade = Timestamp.fromDate(new Date(Date.now() + 86400000));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const a = ctx.firestore();
+      await setDoc(doc(a, 'plataforma/acesso'), { admins: ['dono'], emails: [] });
+      await setDoc(doc(a, 'licencas/LIC-ABCDEF-123456'), { usada: false, email: '', cliente: 'Nova', expiraEm: validade });
+      await setDoc(doc(a, 'licencas/LIC-SOPARAMARIA1'), { usada: false, email: 'maria@x.com', cliente: 'Maria', expiraEm: validade });
+      await setDoc(doc(a, 'licencas/LIC-VENCIDA-0001'), { usada: false, email: '', cliente: 'V', expiraEm: Timestamp.fromDate(new Date(Date.now() - 1000)) });
+    });
+    const criar = (db: ReturnType<typeof como>, org: string, uid: string, licenca?: string) => {
+      const lote = writeBatch(db);
+      lote.set(doc(db, `organizations/${org}`), { name: 'Nova', ownerUid: uid, ...(licenca ? { licenca } : {}) });
+      lote.set(doc(db, `organizations/${org}/members/${uid}`), { role: 'owner', status: 'active', email: `${uid}@x.com` });
+      lote.set(doc(db, `users/${uid}`), { currentOrg: org });
+      if (licenca) lote.update(doc(db, `licencas/${licenca}`), { usada: true, orgId: org, usadaPor: uid, usadaEm: 'agora', usadaEmail: `${uid}@x.com` });
+      return lote.commit();
+    };
+    // Sem código, qualquer conta nova é recusada (o furo que existia).
+    await assertFails(criar(como('novo'), 'N0', 'novo'));
+    // Código inexistente, vencido ou emitido para outro e-mail: recusado.
+    await assertFails(criar(como('novo'), 'N1', 'novo', 'LIC-NAOEXISTE-01'));
+    await assertFails(criar(como('novo'), 'N1', 'novo', 'LIC-VENCIDA-0001'));
+    await assertFails(criar(como('novo'), 'N1', 'novo', 'LIC-SOPARAMARIA1'));
+    // Código válido: cria, e o código fica gasto.
+    await assertSucceeds(criar(como('novo'), 'N', 'novo', 'LIC-ABCDEF-123456'));
+    await assertFails(criar(como('outro'), 'N2', 'outro', 'LIC-ABCDEF-123456'));
+    // Não dá para "gastar" o código apontando para uma empresa que já existe.
+    await assertFails(updateDoc(doc(como('donoB'), 'licencas/LIC-SOPARAMARIA1'), { usada: true, orgId: 'B', usadaPor: 'donoB' }));
+    // E-mail confirmado do destinatário: aceito.
+    const maria = env.authenticatedContext('maria', { email: 'maria@x.com', email_verified: true }).firestore();
+    await assertSucceeds(criar(maria, 'NM', 'maria', 'LIC-SOPARAMARIA1'));
+    // O administrador da plataforma cria a própria empresa sem código.
+    await assertSucceeds(criar(como('dono'), 'ND', 'dono'));
     await assertFails(setDoc(doc(como('estranho'), `${O}/members/estranho`), { role: 'owner', status: 'active' }));
     await assertFails(setDoc(doc(como('estranho'), 'organizations/Z'), { name: 'Z', ownerUid: 'outro' }));
     await assertFails(updateDoc(doc(como('proj'), O), { name: 'Tomada' }));
     await assertFails(updateDoc(doc(como('dono'), O), { ownerUid: 'proj' }));
     await assertSucceeds(updateDoc(doc(como('dono'), O), { name: 'A2', aec: { uf: 'BA' } }));
+  });
+  it('licenças: só o administrador da plataforma emite, lista e revoga', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'plataforma/acesso'), { admins: ['dono'], emails: ['rt@x.com'] }); });
+    const lic = { usada: false, email: '', cliente: 'Construtora X', expiraEm: Timestamp.fromDate(new Date(Date.now() + 86400000)), criadaEm: 'agora', criadaPor: 'dono' };
+    await assertFails(setDoc(doc(como('donoB'), 'licencas/LIC-DONOB-000001'), lic)); // dono de outra empresa não é admin da plataforma
+    await assertFails(setDoc(doc(como('proj'), 'licencas/LIC-PROJ-0000001'), lic));
+    await assertSucceeds(setDoc(doc(como('dono'), 'licencas/LIC-DONO-0000001'), lic));
+    await assertFails(setDoc(doc(como('dono'), 'licencas/LIC-DONO-0000002'), { ...lic, usada: true }));
+    await assertSucceeds(getDocs(collection(como('dono'), 'licencas')));
+    await assertFails(getDocs(collection(como('donoB'), 'licencas')));
+    await assertSucceeds(getDoc(doc(como('dono'), 'plataforma/acesso')));
+    await assertFails(getDoc(doc(como('donoB'), 'plataforma/acesso')));
+    await assertFails(setDoc(doc(como('dono'), 'plataforma/acesso'), { admins: ['dono', 'donoB'] })); // só o instalador grava
+    const rt = env.authenticatedContext('rt', { email: 'rt@x.com', email_verified: true }).firestore();
+    await assertSucceeds(getDocs(collection(rt, 'licencas'))); // admin por e-mail confirmado
+    const rtSemConfirmar = env.authenticatedContext('rt2', { email: 'rt@x.com', email_verified: false }).firestore();
+    await assertFails(getDocs(collection(rtSemConfirmar, 'licencas')));
+    await assertFails(deleteDoc(doc(como('donoB'), 'licencas/LIC-DONO-0000001')));
+    await assertSucceeds(deleteDoc(doc(como('dono'), 'licencas/LIC-DONO-0000001')));
   });
   it('convite: só o proprietário emite; só o e-mail convidado entra, na obra do convite', async () => {
     const validade = Timestamp.fromDate(new Date(Date.now() + 86400000));

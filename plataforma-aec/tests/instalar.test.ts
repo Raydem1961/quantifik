@@ -7,7 +7,7 @@ import { envLocal, idDeEmpresa, localizarChave, sitePadrao } from '../scripts/in
 // @ts-expect-error módulo de script sem tipos
 import { combinarComAoVivo } from '../scripts/mesclar-regras.mjs';
 // @ts-expect-error módulo de script sem tipos
-import { bases, regrasParaPublicar } from '../scripts/gerar-regras.mjs';
+import { bases, regrasParaPublicar, TRAVA } from '../scripts/gerar-regras.mjs';
 import { readFileSync } from 'node:fs';
 
 describe('instalador', () => {
@@ -66,8 +66,11 @@ describe('instalador', () => {
     const r2 = regrasParaPublicar(r.firestore, r.storage);
     expect(r2.firestore).toBe(r.firestore);
     expect(r2.storage).toBe(r.storage);
-    // Sem as extensões, sobra exatamente o que estava no ar.
-    expect(r.firestore.replace(/[ \t]*\/\/ >>> EXTENSÃO ObraTop 4[\s\S]*?\/\/ <<< EXTENSÃO ObraTop 4\n/g, '')).toBe(noAr);
+    // A única mudança na base: criar empresa passa a exigir licença (uma vez só, mesmo reinstalando).
+    expect(r.firestore.split(TRAVA)).toHaveLength(2);
+    expect(r.firestore).toMatch(/match \/organizations\/\{orgId\} \{\s*allow create: if \/\* ObraTop4: licença \*\/ licencaParaEmpresa\(orgId\) && signedIn\(\)/);
+    // Sem as extensões e sem a trava, sobra exatamente o que estava no ar.
+    expect(r.firestore.replace(/[ \t]*\/\/ >>> EXTENSÃO ObraTop 4[\s\S]*?\/\/ <<< EXTENSÃO ObraTop 4\n/g, '').split(TRAVA).join('')).toBe(noAr);
     // Projeto novo (ou regras de outro aplicativo): usa a cópia do ObraTop.
     expect(regrasParaPublicar('', '').baseDoFirestore).toBe('cópia do ObraTop 3.39.13');
     // Os arquivos do repositório são exatamente o que o gerador produz.
